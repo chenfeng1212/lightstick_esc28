@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>ESC 手燈中控台</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="wrap">
+    <h2>ESC 中控台</h2>
+
+    <div class="conn-box">
+        <label style="text-align:right;">Port:</label>
+        <select id="portSelect"><option>讀取中...</option></select>
+        
+        <button class="btn-refresh" onclick="loadPorts()" title="重新整理 Port">↻</button>
+        <button class="btn-conn" id="connBtn" onclick="connectPort()">連線</button>
+        <button class="btn-disc" onclick="disconnectPort()">斷線</button>
+        
+        <span id="status" style="margin-left:10px; color:#aaa;">未連線</span>
+    </div>
+
+    <div class="modes">
+        <button class="m" d-m="1">恆亮</button>
+        <button class="m" d-m="2">呼吸</button>
+        <button class="m" d-m="3">彩虹</button>
+        <button class="m" d-m="4">窗口</button>
+        <button class="m" d-m="5">節拍</button>
+        <button class="m" d-m="7">漸變</button>
+        <button class="m" d-m="0" style="background:#d32f2f; color:white; grid-column: span 2;">關閉 (OFF)</button>
+    </div>
+
+    <div style="text-align:left; margin-bottom:5px; color:#aaa;">控制群組:</div>
+    <div class="group-grid">
+        <label><input type="radio" name="gid" value="0" checked onchange="updateGroup(0)"> 全部</label>
+        <label><input type="radio" name="gid" value="1" onchange="updateGroup(1)"> G1</label>
+        <label><input type="radio" name="gid" value="2" onchange="updateGroup(2)"> G2</label>
+        <label><input type="radio" name="gid" value="3" onchange="updateGroup(3)"> G3</label>
+        <label><input type="radio" name="gid" value="4" onchange="updateGroup(4)"> G4</label>
+        <label><input type="radio" name="gid" value="5" onchange="updateGroup(5)"> G5</label>
+        <label><input type="radio" name="gid" value="6" onchange="updateGroup(6)"> G6</label>
+        <label><input type="radio" name="gid" value="7" onchange="updateGroup(7)"> G7</label>
+        <label><input type="radio" name="gid" value="8" onchange="updateGroup(8)"> G8</label>
+        <label><input type="radio" name="gid" value="9" onchange="updateGroup(9)"> G9</label>
+        <label><input type="radio" name="gid" value="10" onchange="updateGroup(10)"> G10</label>
+    </div>
+
+    <div class="row"><label>亮度</label><input id="bri" type="range" max="255" value="200"></div>
+    <div class="row">
+        <label>BPM</label>
+        <input id="bpm" type="range" min="40" max="200" value="120">
+        <span id="bpmVal" style="width:30px">120</span>
+        <button id="tapBtn">Tap!</button>
+    </div>
+    <div class="row"><label>速度</label><input id="spd" type="range" max="300" value="120"></div>
+    <div class="row"><label>展開</label><input id="spr" type="range" max="100" value="60"></div>
+    <div class="row"><label>Duty</label><input id="dty" type="range" min="5" max="95" value="50"></div>
+    <div class="row"><label>主色</label><input id="col" type="color" value="#00ccff" style="width:100%; height:40px;"></div>
+
+    <div class="row" id="pals">
+        <label>色盤</label>
+        <input type="color" value="#ff0044" style="height:40px">
+        <input type="color" value="#ffd400" style="height:40px">
+        <input type="color" value="#00e5ff" style="height:40px">
+        <input type="color" value="#ffffff" style="height:40px">
+    </div>
+</div>
+
+<script>
+let st = {gid:0, mode:0, bri:200, bpm:120, col:'00ccff', spd:1.2, spr:0.6, dty:0.5, p:['ff0044','ffd400','00e5ff','ffffff']};
+window.onload = loadPorts;
+
+async function loadPorts() {
+    const sel = document.getElementById('portSelect');
+    sel.innerHTML = '<option>讀取中...</option>';
+    try {
+        const res = await fetch('/api/ports');
+        const ports = await res.json();
+        sel.innerHTML = '';
+        if(ports.length === 0) sel.innerHTML = '<option value="">無裝置</option>';
+        ports.forEach(p => {
+            let opt = document.createElement('option');
+            opt.value = p.path;
+            opt.text = p.path;
+            sel.add(opt);
+        });
+    } catch(e) { console.error(e); }
+}
+
+async function connectPort() {
+    const path = document.getElementById('portSelect').value;
+    const btn = document.getElementById('connBtn');
+    const status = document.getElementById('status');
+    if(!path) return alert("請先選擇 Port");
+
+    try {
+        const res = await fetch('/api/connect', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ path, baudRate: 115200 })
+        });
+        const result = await res.json();
+        
+        if(result.success) {
+            btn.style.background = "#4CAF50"; // 連線成功維持綠色或你想變色
+            btn.innerText = "已連線";
+            btn.disabled = true; // 連線後按鈕鎖住，強迫用斷線按鈕
+            status.innerText = "連線成功";
+            status.style.color = "#4CAF50";
+            send(); 
+        } else {
+            alert("連線失敗: " + result.error);
+        }
+    } catch(e) { alert("錯誤: " + e); }
+}
+
+// 新增：斷線功能
+async function disconnectPort() {
+    try {
+        await fetch('/api/disconnect', { method: 'POST' });
+        
+        // 更新 UI 狀態
+        const btn = document.getElementById('connBtn');
+        const status = document.getElementById('status');
+        
+        btn.innerText = "連線";
+        btn.style.background = "#4CAF50";
+        btn.disabled = false; // 解鎖連線按鈕
+        
+        status.innerText = "已斷線";
+        status.style.color = "#aaa";
+        
+    } catch(e) {
+        alert("斷線錯誤: " + e);
+    }
+}
+
+function send() {
+    fetch('/api/send', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            gid: st.gid,
+            mode: st.mode,
+            bri: st.bri,
+            bpm: st.bpm,
+            color: st.col,
+            speed: st.spd,
+            spread: st.spr,
+            duty: st.dty,
+            pal: st.p
+        })
+    }).catch(console.error);
+}
+
+// 介面監聽 (保持不變)
+const $ = s=>document.querySelector(s);
+const $$ = s=>document.querySelectorAll(s);
+function updateGroup(val) { st.gid = val; send(); }
+$$('.m').forEach(b=>{ b.onclick=()=>{ $$('.m').forEach(x=>x.classList.remove('active')); b.classList.add('active'); st.mode=b.getAttribute('d-m'); send(); }});
+$('#bri').oninput=e=>{ st.bri=e.target.value; send(); };
+$('#bpm').oninput=e=>{ st.bpm=e.target.value; $('#bpmVal').innerText=st.bpm; send(); };
+$('#spd').oninput=e=>{ st.spd=e.target.value/100; send(); };
+$('#spr').oninput=e=>{ st.spr=e.target.value/100; send(); };
+$('#dty').oninput=e=>{ st.dty=e.target.value/100; send(); };
+$('#col').oninput=e=>{ st.col=e.target.value.replace('#',''); send(); };
+$$('#pals input').forEach((el,i)=>{ el.oninput=e=>{ st.p[i]=e.target.value.replace('#',''); send(); }});
+const taps = [];
+$('#tapBtn').onclick = (e) => {
+    e.target.style.transform = "scale(0.9)"; setTimeout(()=>e.target.style.transform = "scale(1)", 100);
+    const t = performance.now();
+    if (taps.length > 0 && (t - taps[taps.length-1]) > 2000) taps.length = 0;
+    taps.push(t); while (taps.length > 5) taps.shift();
+    if (taps.length >= 2) {
+        const diffs = taps.slice(1).map((x, i) => x - taps[i]);
+        const avg = diffs.reduce((a, b) => a + b, 0) / diffs.length;
+        let bpm = Math.round(60000 / avg);
+        bpm = Math.max(40, Math.min(200, bpm));
+        $('#bpm').value = bpm; $('#bpmVal').innerText = bpm; st.bpm = bpm; send();
+    }
+};
+</script>
+</body>
+</html>
