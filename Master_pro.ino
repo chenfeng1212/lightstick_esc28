@@ -1,14 +1,7 @@
-/*
-   [Master] 中控發射端 - Final v4
-   - 支援 4色漸變
-   - 支援 Time Sync (時間同步)
-   - 支援 Burst Fire (連發抗掉包)
-   - 支援 STOP 指令
-*/
 #include <ESP8266WiFi.h>
 #include <espnow.h>
 
-// ===================== 資料結構 (全系統必須一致) =====================
+// ===================== 資料結構 =====================
 typedef struct struct_message {
   uint8_t msgId;       
   uint8_t targetGroup; 
@@ -19,8 +12,8 @@ typedef struct struct_message {
   float speed;
   float spread;
   float duty;
-  uint32_t pal[4];    // 漸變色盤
-  uint32_t timestamp; // Master 的時間戳記
+  uint32_t pal[4];   
+  uint32_t timestamp; 
 } struct_message;
 
 struct_message myData;
@@ -48,7 +41,6 @@ void setup() {
 }
 
 void loop() {
-  // 1. 監聽電腦指令
   if (Serial.available() > 0) {
     String input = Serial.readStringUntil('\n');
     input.trim();
@@ -63,21 +55,18 @@ void loop() {
     }
   }
 
-  // 2. 自動重發心跳 (Heartbeat)
   if (hasActiveCommand && (millis() - lastHeartbeatTime > 500)) {
-    myData.timestamp = millis(); // 更新為最新時間
+    myData.timestamp = millis(); 
     esp_now_send(broadcastAddress, (uint8_t *) &myData, sizeof(myData));
     lastHeartbeatTime = millis();
   }
 }
 
 void parseAndSend(String input) {
-  // 預設值
   int group = 0; int mode = 1; int bri = 200; int bpm = 120;
   String colorHex = "00CCFF"; float spd = 1.2; float spr = 0.6; float dty = 0.5;
   String p[4] = {"FF0000", "00FF00", "0000FF", "FFFFFF"};
 
-  // 解析字串
   int idx[12]; int found = 0; idx[0] = input.indexOf(',');
   while(idx[found] != -1 && found < 11) { found++; idx[found] = input.indexOf(',', idx[found-1] + 1); }
   
@@ -106,10 +95,8 @@ void parseAndSend(String input) {
   myData.duty = dty;
   for(int i=0; i<4; i++) myData.pal[i] = strtoul(p[i].c_str(), NULL, 16);
   
-  // 加入時間戳記
   myData.timestamp = millis();
 
-  // === 機關槍連發 (Burst Fire) ===
   for (int i = 0; i < 5; i++) {
     esp_now_send(broadcastAddress, (uint8_t *) &myData, sizeof(myData));
     delay(10);
