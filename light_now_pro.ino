@@ -9,11 +9,10 @@
 #define LED_TYPE    WS2812B
 #define COLOR_ORDER GRB 
 
-const char* AP_SSID = "LightStick_139"; 
+const char* AP_SSID = "LightStick_140"; 
 const int   AP_CHANNEL = 1; 
 const int   MY_GROUP_ID = 9; 
 
-// 狀態結構
 struct State {
   uint8_t  mode;
   uint8_t  brightness;
@@ -52,12 +51,11 @@ ESP8266WebServer server(80);
 
 unsigned long last_server_time = 0;
 bool is_server_online = false;
-long timeOffset = 0; // 時間偏差值
+long timeOffset = 0; 
 
 uint32_t parseHex(String s) { s.replace("#", ""); return strtoul(s.c_str(), NULL, 16); }
 CRGB lerpColor(uint32_t c1, uint32_t c2, float f) { CRGB a(c1), b(c2); return blend(a, b, f * 255); }
 
-// ESP-NOW 接收
 void OnDataRecv(uint8_t * mac, uint8_t *incomingDataPtr, uint8_t len) {
   memcpy(&incomingData, incomingDataPtr, sizeof(incomingData));
   last_server_time = millis();
@@ -72,16 +70,13 @@ void OnDataRecv(uint8_t * mac, uint8_t *incomingDataPtr, uint8_t len) {
     server_state.duty = incomingData.duty;
     for(int i=0; i<4; i++) server_state.pal[i] = incomingData.pal[i];
     
-    // 計算與 Master 的時間差
     timeOffset = incomingData.timestamp - millis();
   }
 }
 
-// 渲染邏輯
 void render(State *st, bool useSyncTime) {
   FastLED.setBrightness(st->brightness);
   
-  // 使用同步時間 或 本地時間
   uint32_t now = useSyncTime ? (millis() + timeOffset) : millis();
 
   uint32_t color = st->color;
@@ -237,7 +232,6 @@ $('#tapBtn').onclick = (e) => {
 </script></body></html>
 )rawliteral";
 
-// Android Captive Portal 處理
 void handleCaptivePortal() {
   String host = server.hostHeader();
   if (host != "192.168.4.1" || server.uri().indexOf("generate_204") >= 0) {
@@ -256,7 +250,6 @@ void handleSet() {
   if (server.hasArg("spd")) web_state.speed = server.arg("spd").toFloat();
   if (server.hasArg("spr")) web_state.spread = server.arg("spr").toFloat();
   if (server.hasArg("dty")) web_state.duty = server.arg("dty").toFloat();
-  // 更新 Web 狀態的色盤
   if (server.hasArg("pal")) {
     String pStr = server.arg("pal");
     int lastIndex = 0;
@@ -300,10 +293,10 @@ void loop() {
 
   if (millis() - last_server_time < 5000) {
     if (!is_server_online) is_server_online = true;
-    render(&server_state, true); // True: 使用 Master 同步時間
+    render(&server_state, true); 
   } else {
     if (is_server_online) is_server_online = false;
-    render(&web_state, false);   // False: 使用本地時間
+    render(&web_state, false);  
   }
   FastLED.show();
   delay(15);
