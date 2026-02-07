@@ -104,9 +104,9 @@ async function connectPort() {
         const result = await res.json();
         
         if(result.success) {
-            btn.style.background = "#4CAF50"; // 連線成功維持綠色或你想變色
+            btn.style.background = "#4CAF50"; 
             btn.innerText = "已連線";
-            btn.disabled = true; // 連線後按鈕鎖住，強迫用斷線按鈕
+            btn.disabled = true; 
             status.innerText = "連線成功";
             status.style.color = "#4CAF50";
             send(); 
@@ -116,18 +116,16 @@ async function connectPort() {
     } catch(e) { alert("錯誤: " + e); }
 }
 
-// 新增：斷線功能
 async function disconnectPort() {
     try {
         await fetch('/api/disconnect', { method: 'POST' });
         
-        // 更新 UI 狀態
         const btn = document.getElementById('connBtn');
         const status = document.getElementById('status');
         
         btn.innerText = "連線";
         btn.style.background = "#4CAF50";
-        btn.disabled = false; // 解鎖連線按鈕
+        btn.disabled = false; 
         
         status.innerText = "已斷線";
         status.style.color = "#aaa";
@@ -155,7 +153,6 @@ function send() {
     }).catch(console.error);
 }
 
-// 介面監聽 (保持不變)
 const $ = s=>document.querySelector(s);
 const $$ = s=>document.querySelectorAll(s);
 function updateGroup(val) { st.gid = val; send(); }
@@ -183,4 +180,5 @@ $('#tapBtn').onclick = (e) => {
 };
 </script>
 </body>
+
 </html>
