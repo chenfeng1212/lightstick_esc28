@@ -1,12 +1,6 @@
-/*
-   [Gateway] 中繼站 - Final v2
-   - 修正心跳被阻擋問題
-   - 支援隨機避讓
-*/
 #include <ESP8266WiFi.h>
 #include <espnow.h>
 
-// 資料結構 (必須一致)
 typedef struct struct_message {
   uint8_t msgId;       
   uint8_t targetGroup; 
@@ -59,17 +53,17 @@ void OnDataRecv(uint8_t * mac, uint8_t *incomingDataPtr, uint8_t len) {
     isNewCommand = true;
     lastMsgId = incomingData.msgId;
   } else if (millis() - lastRelayTime > 200) {
-    shouldRelay = true; // 放行心跳
+    shouldRelay = true; 
     isNewCommand = false;
   }
 
   if (shouldRelay) {
     digitalWrite(STATUS_LED, LOW);
-    delayMicroseconds(random(1000, 4000)); // 避讓
+    delayMicroseconds(random(1000, 4000));
     
     esp_now_send(broadcastAddress, (uint8_t *) &incomingData, sizeof(incomingData));
     
-    if (isNewCommand) { // 新指令補發一槍
+    if (isNewCommand) {
       delay(5);
       esp_now_send(broadcastAddress, (uint8_t *) &incomingData, sizeof(incomingData));
     }
