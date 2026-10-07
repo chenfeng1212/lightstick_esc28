@@ -53,10 +53,9 @@ body.is-live .bar{border-bottom-color:var(--live)}
 /* ---------- scenes ---------- */
 .scenes{position:sticky;top:76px;max-height:calc(100vh - 92px);display:flex;flex-direction:column}
 .slist{display:flex;flex-direction:column;gap:8px;overflow:auto;margin:0 -4px;padding:0 4px 4px}
-.scene{position:relative;display:grid;grid-template-columns:28px 1fr auto;align-items:center;gap:10px;padding:10px 10px 10px 12px;
+.scene{position:relative;display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px;padding:10px 10px 10px 12px;
   background:var(--bg);border:1px solid var(--line);border-radius:12px;cursor:pointer;transition:.15s}
 .scene:hover{border-color:var(--line2);background:#0e0e12}
-.scene .k{font:700 12px var(--mono);color:var(--tx2);text-align:center;border:1px solid var(--line);border-radius:6px;height:24px;line-height:22px}
 .scene .nm{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .scene .dots{display:flex;gap:3px;margin-top:5px}
 .scene .dots i{width:10px;height:10px;border-radius:50%;background:#000;border:1px solid #ffffff14}
@@ -65,7 +64,7 @@ body.is-live .bar{border-bottom-color:var(--live)}
 .scene .more:hover{background:var(--panel2);color:var(--tx)}
 .scene.loaded{border-color:var(--c)}
 .scene.onair{box-shadow:inset 3px 0 0 var(--live)}
-.scene.onair .k{background:var(--live);border-color:transparent;color:#fff}
+.scene.onair .nm::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--live);box-shadow:0 0 8px var(--live);margin-right:8px;vertical-align:2px}
 .add{margin-top:12px}
 .empty{color:var(--tx2);font-size:13px;text-align:center;padding:24px 8px;border:1px dashed var(--line);border-radius:12px}
 .menu{position:absolute;right:8px;top:40px;z-index:4;background:var(--panel2);border:1px solid var(--line2);border-radius:10px;padding:4px;min-width:160px;box-shadow:0 12px 32px #000a}
@@ -80,6 +79,7 @@ body.is-live .bar{border-bottom-color:var(--live)}
   background:var(--bg);border:1px solid var(--line);cursor:pointer;transition:border-color .15s,background .15s}
 .tile .o{width:min(44px,70%);aspect-ratio:1;border-radius:50%;background:var(--g,var(--o,#000));box-shadow:0 0 18px 2px var(--o,#000)}
 .tile span{font:700 12px var(--mono);color:var(--tx2)}
+.tile kbd{position:absolute;top:5px;left:7px;font-size:9px;opacity:.6}
 .tile.sel{border-color:var(--c);background:color-mix(in srgb,var(--c) 8%,var(--bg))}
 .tile.sel span{color:var(--tx)}
 .tile.dirty::after{content:"";position:absolute;top:7px;right:7px;width:7px;height:7px;border-radius:50%;background:var(--warn);box-shadow:0 0 6px var(--warn)}
