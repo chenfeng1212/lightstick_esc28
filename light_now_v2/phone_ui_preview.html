@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="theme-color" content="#0A0A0D"/>
+<title>手燈控制</title>
+<style>
+:root{
+  --bg:#0A0A0D;--panel:#141419;--panel2:#1B1B22;--line:#24242C;
+  --tx:#F2F2F5;--tx2:#8A8A96;--red:#FF3B4A;--ok:#3DDC97;
+  --c:#00ccff;--r:16px;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--tx);
+  font:16px/1.5 -apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;user-select:none}
+.wrap{max-width:480px;margin:0 auto;padding:16px 16px 40px}
+
+/* ---------- header ---------- */
+.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.brand{font-weight:800;letter-spacing:.04em;font-size:15px}
+.brand small{display:block;color:var(--tx2);font:500 12px var(--mono);letter-spacing:0}
+.pill{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--tx2);
+  padding:6px 10px;border:1px solid var(--line);border-radius:99px}
+.pill i{width:7px;height:7px;border-radius:50%;background:var(--tx2)}
+.pill.sync i{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.pill.sync{color:var(--tx)}
+
+/* ---------- stage (hero) ---------- */
+.stage{position:relative;height:230px;display:grid;place-items:center;margin:4px 0 12px}
+.orb{width:150px;height:150px;border-radius:50%;background:var(--o,#000);
+  box-shadow:0 0 60px 10px var(--o,#000),0 0 140px 30px color-mix(in srgb,var(--o,#000) 45%,transparent);
+  transition:background .08s linear}
+.stage::before{content:"";position:absolute;inset:0;
+  background:radial-gradient(circle at 50% 50%,color-mix(in srgb,var(--o,#000) 18%,transparent),transparent 65%);pointer-events:none}
+.leds{position:absolute;bottom:6px;display:flex;gap:14px}
+.leds b{width:12px;height:12px;border-radius:50%;background:#000;border:1px solid var(--line)}
+.notice{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  padding:10px 12px;font-size:13px;color:var(--tx2);margin-bottom:12px;display:none}
+.notice.show{display:block}
+
+/* ---------- tabs ---------- */
+.tabs{display:grid;grid-template-columns:1fr 1fr;background:var(--panel);border:1px solid var(--line);
+  border-radius:99px;padding:4px;margin-bottom:16px}
+.tabs button{all:unset;text-align:center;padding:10px;border-radius:99px;font-weight:700;font-size:15px;color:var(--tx2);cursor:pointer;transition:.2s}
+.tabs button.on{background:var(--panel2);color:var(--tx)}
+.view{display:none}.view.on{display:block;animation:in .25s ease-out}
+@keyframes in{from{opacity:0;transform:translateY(6px)}}
+
+/* ---------- modes ---------- */
+.modes{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px}
+.m{all:unset;text-align:center;min-height:52px;border-radius:99px;background:var(--panel);
+  border:1px solid var(--line);font-weight:700;cursor:pointer;transition:.2s}
+.m:active{transform:scale(.96)}
+.m.on{background:var(--c);color:#000;border-color:transparent;
+  box-shadow:0 0 24px color-mix(in srgb,var(--c) 60%,transparent)}
+.m.off{grid-column:span 3;color:var(--red);border-color:color-mix(in srgb,var(--red) 40%,transparent)}
+.m.off.on{background:var(--red);color:#fff;box-shadow:0 0 24px color-mix(in srgb,var(--red) 50%,transparent)}
+
+/* ---------- panel / rows ---------- */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:6px 16px;margin-bottom:12px}
+.row{display:grid;grid-template-columns:52px 1fr 44px;gap:12px;align-items:center;min-height:56px;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.row[hidden]{display:none}
+.row label{font-size:14px;color:var(--tx2)}
+.row .v{font:600 14px var(--mono);text-align:right}
+.row.bpm{grid-template-columns:52px 1fr 44px 64px}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:28px;background:transparent;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:6px;
+  background:linear-gradient(90deg,var(--c) var(--p,50%),var(--line) var(--p,50%))}
+input[type=range]::-moz-range-track{height:6px;border-radius:6px;background:var(--line)}
+input[type=range]::-moz-range-progress{height:6px;border-radius:6px;background:var(--c)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;margin-top:-9px;border-radius:50%;background:#fff;border:0;box-shadow:0 2px 8px #0008}
+input[type=range]::-moz-range-thumb{width:24px;height:24px;border-radius:50%;background:#fff;border:0}
+.tap{all:unset;text-align:center;height:40px;border-radius:12px;background:var(--panel2);border:1px solid var(--line);
+  font:800 13px var(--mono);letter-spacing:.08em;cursor:pointer;transition:transform .08s}
+.tap.hit{transform:scale(.9);background:var(--c);color:#000}
+
+/* colors */
+.swatches{display:flex;gap:10px;flex-wrap:wrap}
+.sw{position:relative;width:44px;height:44px;border-radius:50%;border:2px solid var(--line);overflow:hidden;cursor:pointer}
+.sw input{position:absolute;inset:-10px;width:70px;height:70px;border:0;padding:0;opacity:0;cursor:pointer}
+.sw.cur{border-color:#fff}
+.row.col{grid-template-columns:52px 1fr}
+
+/* ---------- settings ---------- */
+.field{padding:12px 0;border-bottom:1px solid var(--line)}
+.field:last-child{border-bottom:0}
+.field label{display:block;font-size:13px;color:var(--tx2);margin-bottom:6px}
+.field input[type=text],.field input[type=password]{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:12px;
+  color:var(--tx);font:16px var(--mono);padding:12px 44px 12px 14px;outline:none;transition:border-color .2s}
+.field input:focus{border-color:var(--c)}
+.field input.bad{border-color:var(--red)}
+.field .hint{font-size:12px;color:var(--tx2);margin-top:6px}
+.field .hint.bad{color:var(--red)}
+.pw{position:relative}
+.eye{all:unset;position:absolute;right:6px;top:50%;transform:translateY(-50%);padding:8px;font-size:12px;color:var(--tx2);cursor:pointer}
+.groups{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.groups button{all:unset;text-align:center;height:44px;border-radius:10px;background:var(--bg);border:1px solid var(--line);font:700 15px var(--mono);cursor:pointer}
+.groups button.on{background:var(--c);color:#000;border-color:transparent}
+.warn{border:1px solid color-mix(in srgb,#FFB020 50%,transparent);background:color-mix(in srgb,#FFB020 8%,transparent);
+  color:#FFCF70;border-radius:12px;padding:10px 12px;font-size:13px;margin-bottom:12px}
+.save{all:unset;display:block;width:100%;text-align:center;height:54px;line-height:54px;border-radius:99px;
+  background:var(--c);color:#000;font-weight:800;cursor:pointer;margin-top:4px;transition:.2s}
+.save:disabled{opacity:.35;cursor:not-allowed}
+.save:active:not(:disabled){transform:scale(.98)}
+.meta{font:12px var(--mono);color:var(--tx2);text-align:center;margin-top:16px}
+
+/* ---------- sheet ---------- */
+.sheet{position:fixed;inset:0;background:#000a;display:none;align-items:flex-end;justify-content:center;z-index:9}
+.sheet.on{display:flex}
+.sheet .box{width:100%;max-width:480px;background:var(--panel);border-top-left-radius:24px;border-top-right-radius:24px;
+  padding:24px 20px 32px;border:1px solid var(--line);animation:up .25s ease-out}
+@keyframes up{from{transform:translateY(40px);opacity:0}}
+.sheet h3{margin:0 0 8px;font-size:20px}
+.sheet p{color:var(--tx2);margin:0 0 16px;font-size:14px}
+.sheet .new{font:700 18px var(--mono);background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px;text-align:center;margin-bottom:16px;word-break:break-all}
+.ghost{all:unset;display:block;width:100%;text-align:center;height:48px;line-height:48px;color:var(--tx2);cursor:pointer;margin-top:8px}
+
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);opacity:0;pointer-events:none;
+  background:var(--panel2);border:1px solid var(--line);border-radius:99px;padding:10px 18px;font-size:14px;transition:.25s;z-index:10}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top">
+    <div class="brand">ESC LIGHTSTICK<small id="hdrSsid">—</small></div>
+    <div class="pill" id="pill"><i></i><span>獨立模式</span></div>
+  </div>
+
+  <div class="stage">
+    <div class="orb" id="orb"></div>
+    <div class="leds" id="leds"><b></b><b></b><b></b><b></b></div>
+  </div>
+
+  <div class="notice" id="syncNote">目前正在接收中控台訊號，這裡的調整會在中控停止 5 秒後才生效。</div>
+
+  <div class="tabs">
+    <button class="on" data-v="light">燈光</button>
+    <button data-v="set">設定</button>
+  </div>
+
+  <!-- ================= 燈光 ================= -->
+  <section class="view on" id="v-light">
+    <div class="modes">
+      <button class="m" data-m="1">恆亮</button>
+      <button class="m on" data-m="2">呼吸</button>
+      <button class="m" data-m="3">彩虹</button>
+      <button class="m" data-m="4">窗口</button>
+      <button class="m" data-m="5">節拍</button>
+      <button class="m" data-m="7">漸變</button>
+      <button class="m off" data-m="0">關閉</button>
+    </div>
+
+    <div class="panel">
+      <div class="row"><label>亮度</label><input id="bri" type="range" min="0" max="255" value="200"><span class="v" id="briV">78%</span></div>
+      <div class="row bpm" data-for="2 5"><label>BPM</label><input id="bpm" type="range" min="10" max="200" value="120"><span class="v" id="bpmV">120</span><button class="tap" id="tap">TAP</button></div>
+      <div class="row" data-for="3 4 7"><label>速度</label><input id="spd" type="range" min="0" max="300" value="120"><span class="v" id="spdV">1.2</span></div>
+      <div class="row" data-for="3 4"><label>展開</label><input id="spr" type="range" min="0" max="100" value="60"><span class="v" id="sprV">60</span></div>
+      <div class="row" data-for="5"><label>亮佔比</label><input id="dty" type="range" min="5" max="95" value="50"><span class="v" id="dtyV">50%</span></div>
+      <div class="row col" data-for="1 2 4 5"><label>主色</label>
+        <div class="swatches" id="mainSw"></div></div>
+      <div class="row col" data-for="7"><label>色盤</label>
+        <div class="swatches" id="palSw"></div></div>
+    </div>
+  </section>
+
+  <!-- ================= 設定 ================= -->
+  <section class="view" id="v-set">
+    <div class="warn" id="openWarn">此手燈目前沒有設定密碼，任何人都能連線並修改。建議設定一組密碼。</div>
+
+    <div class="panel">
+      <div class="field">
+        <label for="ssid">Wi-Fi 名稱 (SSID)</label>
+        <input type="text" id="ssid" maxlength="32" autocomplete="off" spellcheck="false">
+        <div class="hint" id="ssidH">1–32 個字元</div>
+      </div>
+      <div class="field">
+        <label for="npw">新密碼</label>
+        <div class="pw"><input type="password" id="npw" maxlength="63" autocomplete="new-password" placeholder="留空 = 不變更"><button class="eye" data-t="npw">顯示</button></div>
+        <div class="hint" id="npwH">8–63 個字元；留空表示維持目前密碼</div>
+      </div>
+      <div class="field">
+        <label>群組</label>
+        <div class="groups" id="groups"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="curBox">
+      <div class="field">
+        <label for="cpw">目前密碼</label>
+        <div class="pw"><input type="password" id="cpw" maxlength="63" autocomplete="current-password"><button class="eye" data-t="cpw">顯示</button></div>
+        <div class="hint" id="cpwH">儲存前需驗證目前密碼</div>
+      </div>
+    </div>
+
+    <button class="save" id="save" disabled>儲存設定</button>
+    <div class="meta" id="meta">—</div>
+  </section>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- confirm sheet -->
+<div class="sheet" id="sheet"><div class="box">
+  <h3>確認套用？</h3>
+  <p>儲存後手燈會重新啟動 Wi-Fi，你的手機將會斷線。請到手機 Wi-Fi 設定重新連線到：</p>
+  <div class="new" id="newSsid">—</div>
+  <button class="save" id="go">確認並重新啟動</button>
+  <button class="ghost" id="cancel">取消</button>
+</div></div>
+
+<!-- done sheet -->
+<div class="sheet" id="done"><div class="box">
+  <h3>已儲存</h3>
+  <p>手燈正在重新啟動 Wi-Fi。請連線到下方網路，連上後會自動回到此頁面。</p>
+  <div class="new" id="doneSsid">—</div>
+</div></div>
+
+<script>
+const $=s=>document.querySelector(s),$$=s=>document.querySelectorAll(s);
+const PRESET=['00ccff','ff0044','ffd400','3ddc97','b14cff','ffffff'];
+let st={m:2,bri:200,bpm:120,col:'00ccff',spd:1.2,spr:.6,dty:.5,p:['ff0044','ffd400','00e5ff','ffffff']};
+let cfg={ssid:'LightStick_140',group:9,hasPw:false,online:false,mac:'—',fw:'—'};
+let selGroup=9;
+
+/* ---------- API（在 ESP8266 外預覽時自動使用假資料） ---------- */
+const MOCK=!/^192\.168\.4\./.test(location.hostname);
+// 節流：拖動滑桿時最多每 80ms 送一次，並保證最後一個值一定送出（避免 ESP8266 被請求塞爆）
+let sendT=0,sendPend=false;
+function send(){
+  if(sendT){sendPend=true;return;}
+  doSend();
+  sendT=setTimeout(function f(){if(sendPend){sendPend=false;doSend();sendT=setTimeout(f,80);}else sendT=0;},80);
+}
+function doSend(){
+  const u=`/set?m=${st.m}&bri=${st.bri}&bpm=${st.bpm}&c=${st.col}&spd=${st.spd}&spr=${st.spr}&dty=${st.dty}&pal=${st.p.join(',')}`;
+  if(!MOCK)fetch(u).catch(()=>{});
+}
+async function getCfg(){
+  if(MOCK)return {ssid:'LightStick_140',group:9,hasPw:false,online:false,mac:'5C:CF:7F:XX:XX:XX',fw:'preview'};
+  return await (await fetch('/config')).json();
+}
+function showStatus(){
+  $('#pill').classList.toggle('sync',cfg.online);
+  $('#pill span').textContent=cfg.online?'中控同步中':'獨立模式';
+  $('#syncNote').classList.toggle('show',cfg.online);
+}
+async function loadCfg(){
+  try{cfg=await getCfg()}catch(e){}
+  if(cfg.st){ // 用手燈目前的狀態初始化介面
+    const s=cfg.st;Object.assign(st,{m:s.m,bri:s.bri,bpm:s.bpm,col:s.col,spd:s.spd,spr:s.spr,dty:s.dty,p:s.p});
+    const ui={bri:st.bri,bpm:st.bpm,spd:Math.round(st.spd*100),spr:Math.round(st.spr*100),dty:Math.round(st.dty*100)};
+    for(const k in ui){const el=$('#'+k);el.value=ui[k];$('#'+k+'V').textContent=SL[k][1](+el.value);fill(el);}
+    setAccent();drawMain();drawPal();applyMode();
+  }
+  selGroup=cfg.group;
+  $('#ssid').value=cfg.ssid;$('#hdrSsid').textContent=cfg.ssid;
+  $('#openWarn').style.display=cfg.hasPw?'none':'block';
+  $('#curBox').style.display=cfg.hasPw?'block':'none';
+  $('#meta').textContent=`G${cfg.group} · ${cfg.mac} · ${cfg.fw}`;
+  showStatus();drawGroups();validate();
+}
+// 每 3 秒更新一次「中控同步中 / 獨立模式」
+setInterval(async()=>{if(MOCK||document.hidden)return;try{const c=await getCfg();cfg.online=c.online;showStatus();}catch(e){}},3000);
+async function saveCfg(){
+  const body=new URLSearchParams({ssid:$('#ssid').value.trim(),npw:$('#npw').value,group:selGroup,cpw:$('#cpw').value});
+  if(MOCK)return {ok:true,restart:$('#ssid').value.trim()!==cfg.ssid||$('#npw').value!==''};
+  try{const r=await fetch('/config',{method:'POST',body});return await r.json()}catch(e){return {ok:false,err:'連線失敗，請再試一次'}}
+}
+function wifiChanged(){return $('#ssid').value.trim()!==cfg.ssid||$('#npw').value!==''}
+
+/* ---------- tabs ---------- */
+$$('.tabs button').forEach(b=>b.onclick=()=>{
+  $$('.tabs button').forEach(x=>x.classList.toggle('on',x===b));
+  $$('.view').forEach(v=>v.classList.toggle('on',v.id==='v-'+b.dataset.v));
+});
+
+/* ---------- modes ---------- */
+function applyMode(){
+  $$('.m').forEach(b=>b.classList.toggle('on',+b.dataset.m===+st.m));
+  $$('.row[data-for]').forEach(r=>r.hidden=!r.dataset.for.split(' ').includes(String(st.m)));
+}
+$$('.m').forEach(b=>b.onclick=()=>{st.m=+b.dataset.m;applyMode();send();});
+
+/* ---------- sliders ---------- */
+function fill(el){el.style.setProperty('--p',((el.value-el.min)/(el.max-el.min)*100)+'%')}
+const SL={
+  bri:[v=>st.bri=v,v=>Math.round(v/2.55)+'%'],
+  bpm:[v=>st.bpm=v,v=>v],
+  spd:[v=>st.spd=v/100,v=>(v/100).toFixed(1)],
+  spr:[v=>st.spr=v/100,v=>v],
+  dty:[v=>st.dty=v/100,v=>v+'%'],
+};
+for(const k in SL){const el=$('#'+k);fill(el);el.oninput=()=>{SL[k][0](+el.value);$('#'+k+'V').textContent=SL[k][1](+el.value);fill(el);send();}}
+
+/* ---------- tap tempo ---------- */
+const taps=[];
+$('#tap').onclick=e=>{
+  const b=e.currentTarget;b.classList.add('hit');setTimeout(()=>b.classList.remove('hit'),100);
+  const t=performance.now();
+  if(taps.length&&t-taps[taps.length-1]>2000)taps.length=0;
+  taps.push(t);while(taps.length>5)taps.shift();
+  if(taps.length>=2){
+    const d=taps.slice(1).map((x,i)=>x-taps[i]);
+    let bpm=Math.max(10,Math.min(200,Math.round(60000/(d.reduce((a,b)=>a+b)/d.length))));
+    $('#bpm').value=bpm;$('#bpm').oninput();
+  }
+};
+
+/* ---------- colors ---------- */
+function setAccent(){document.documentElement.style.setProperty('--c','#'+st.col)}
+function swatch(hex,onPick,cur){
+  const d=document.createElement('label');d.className='sw'+(cur?' cur':'');d.style.background='#'+hex;
+  const i=document.createElement('input');i.type='color';i.value='#'+hex;
+  i.oninput=()=>{d.style.background=i.value;onPick(i.value.slice(1));};
+  d.appendChild(i);return d;
+}
+function drawMain(){
+  const w=$('#mainSw');w.innerHTML='';
+  PRESET.forEach(h=>{const s=document.createElement('button');s.className='sw'+(h===st.col?' cur':'');s.style.background='#'+h;
+    s.onclick=()=>{st.col=h;setAccent();drawMain();send();};w.appendChild(s);});
+  // 自訂顏色
+  const custom=!PRESET.includes(st.col);
+  const c=swatch(custom?st.col:'888888',h=>{st.col=h;setAccent();send();},custom);
+  c.style.background=custom?'#'+st.col:'conic-gradient(red,yellow,lime,cyan,blue,magenta,red)';
+  c.title='自訂';w.appendChild(c);
+}
+function drawPal(){const w=$('#palSw');w.innerHTML='';st.p.forEach((h,i)=>w.appendChild(swatch(h,v=>{st.p[i]=v;send();})))}
+
+/* ---------- 燈色預覽：與韌體 render() 相同的公式 ---------- */
+const hex2=h=>[parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];
+const sc=(c,k)=>c.map(x=>x*k);
+const hsv=h=>{const f=(n,k=(n+h*6)%6)=>255*(1-Math.max(Math.min(k,4-k,1),0));return[f(5),f(3),f(1)]};
+const lerp=(a,b,f)=>a.map((x,i)=>x+(b[i]-x)*f);
+function frame(now){
+  const N=4,out=[];const c=hex2(st.col);
+  for(let i=0;i<N;i++){
+    let v=[0,0,0];
+    switch(st.m){
+      case 1:v=c;break;
+      case 2:v=sc(c,Math.cos(2*Math.PI*(st.bpm/60000)*now)*.5+.5);break;
+      case 3:v=hsv(((now*.001*Math.max(.01,st.spd))+i*st.spr/N)%1);break;
+      case 4:{const p=(now*.001*Math.max(.01,st.spd))%1,h=Math.min(1,Math.max(.05,st.spr))/2;v=sc(c,Math.abs(i/(N-1)-p)<h?1:.1)}break;
+      case 5:v=sc(c,((now/60000)*st.bpm)%1<=st.dty?1:.05);break;
+      case 7:{const p=((now*.001*Math.max(.01,st.spd))%1)*4,a=Math.floor(p)%4;v=lerp(hex2(st.p[a]),hex2(st.p[(a+1)%4]),p-Math.floor(p))}break;
+    }
+    out.push(sc(v,st.bri/255));
+  }
+  const css=a=>`rgb(${a.map(Math.round).join(',')})`;
+  $$('#leds b').forEach((b,i)=>{b.style.background=css(out[i]);b.style.boxShadow=`0 0 10px ${css(out[i])}`});
+  const avg=[0,1,2].map(k=>out.reduce((s,o)=>s+o[k],0)/N);
+  $('#orb').style.setProperty('--o',css(avg));
+  requestAnimationFrame(frame);
+}
+
+/* ---------- 設定驗證 ---------- */
+function drawGroups(){
+  const g=$('#groups');g.innerHTML='';
+  for(let i=1;i<=10;i++){const b=document.createElement('button');b.textContent=i;b.className=i===selGroup?'on':'';
+    b.onclick=()=>{selGroup=i;drawGroups();validate();};g.appendChild(b);}
+}
+function validate(){
+  const s=$('#ssid').value.trim(),n=$('#npw').value,c=$('#cpw').value;
+  const sOk=s.length>=1&&new TextEncoder().encode(s).length<=32;
+  const nOk=n===''||(n.length>=8&&n.length<=63);
+  const cOk=!cfg.hasPw||c.length>=8;
+  const changed=s!==cfg.ssid||n!==''||selGroup!==cfg.group;
+  $('#ssid').classList.toggle('bad',!sOk);$('#ssidH').classList.toggle('bad',!sOk);
+  $('#npw').classList.toggle('bad',!nOk);$('#npwH').classList.toggle('bad',!nOk);
+  $('#npwH').textContent=nOk?'8–63 個字元；留空表示維持目前密碼':`還差 ${Math.max(0,8-n.length)} 個字元（最少 8 個）`;
+  $('#save').disabled=!(sOk&&nOk&&cOk&&changed);
+}
+['ssid','npw','cpw'].forEach(id=>$('#'+id).oninput=validate);
+$$('.eye').forEach(b=>b.onclick=()=>{const i=$('#'+b.dataset.t);i.type=i.type==='password'?'text':'password';b.textContent=i.type==='password'?'顯示':'隱藏';});
+
+$('#cpw').addEventListener('input',()=>{$('#cpw').classList.remove('bad');$('#cpwH').classList.remove('bad');$('#cpwH').textContent='儲存前需驗證目前密碼';});
+function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('on'),2200);}
+function fail(r){
+  if(r.field==='cpw'||!r.field){$('#cpw').classList.add('bad');$('#cpwH').classList.add('bad');$('#cpwH').textContent=r.err||'目前密碼錯誤';}
+  toast(r.err||'儲存失敗');
+}
+async function commit(btn,label){
+  btn.disabled=true;const old=btn.textContent;btn.textContent=label;
+  const r=await saveCfg();
+  btn.disabled=false;btn.textContent=old;
+  return r;
+}
+$('#save').onclick=async()=>{
+  if(wifiChanged()){$('#newSsid').textContent=$('#ssid').value.trim();$('#sheet').classList.add('on');return;}
+  // 只改群組：不需要重啟 Wi-Fi
+  const r=await commit($('#save'),'儲存中…');
+  if(r.ok){cfg.group=selGroup;$('#cpw').value='';$('#meta').textContent=`G${cfg.group} · ${cfg.mac} · ${cfg.fw}`;validate();toast(`已切換到群組 ${selGroup}`);}
+  else{fail(r);validate();}
+};
+$('#cancel').onclick=()=>$('#sheet').classList.remove('on');
+$('#go').onclick=async()=>{
+  const r=await commit($('#go'),'儲存中…');
+  $('#sheet').classList.remove('on');
+  if(r.ok){$('#doneSsid').textContent=$('#ssid').value.trim();$('#done').classList.add('on');}
+  else fail(r);
+};
+
+/* ---------- init ---------- */
+setAccent();drawMain();drawPal();applyMode();loadCfg();requestAnimationFrame(frame);
+</script>
+</body>
+</html>
