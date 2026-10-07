@@ -1,5 +1,7 @@
 // =====================================================================
-//  ESC LightStick — 終端燈具節點 v2
+//  ESC LightStick — 終端燈具節點 v3
+//  - v3：配合 Master v3 —— 指定時間同步切換 (applyAt)、淡入混色 (fadeMs)、
+//        狀態版本 (seq) 去重，心跳重送不會重新觸發淡入
 //  - 新版舞台風手機介面（燈光 / 設定 兩分頁）
 //  - 可在手機頁修改 Wi-Fi 名稱、密碼、群組 ID（存在 EEPROM，重開機保留）
 //  - HTML 存放在 PROGMEM，節省 RAM
@@ -12,7 +14,8 @@
 #include <FastLED.h>
 #include <espnow.h>
 
-#define FW_VERSION  "v2.0"
+#define FW_VERSION  "v3.0"
+#define PROTO_VER   3      // 必須與 Master / Gateway 相同
 
 #define LED_PIN     D5
 #define NUM_LEDS    4
@@ -75,23 +78,38 @@ struct State {
 };
 
 State web_state    = {0, 200, 120, 0x00CCFF, 1.2f, 0.6f, 0.5f, {0xFF0044, 0xFFD400, 0x00E5FF, 0xFFFFFF}};
-State server_state = {0, 0, 0, 0, 0, 0, 0, {0, 0, 0, 0}};
 
-typedef struct struct_message {
+// ===================== 封包（Master / Gateway / 手燈 必須完全相同） =====================
+typedef struct {
+  uint8_t  ver;          // 協定版本 = 3
   uint8_t  msgId;
-  uint8_t  targetGroup;
+  uint8_t  targetGroup;  // 0 = 全部, 1–10
   uint8_t  mode;
   uint8_t  brightness;
+  uint8_t  reserved;
   uint16_t bpm;
+  uint16_t fadeMs;
+  uint16_t seq;          // 狀態版本
   uint32_t color;
   float    speed;
   float    spread;
   float    duty;
   uint32_t pal[4];
-  uint32_t timestamp;
-} struct_message;
+  uint32_t timestamp;    // Master millis()（校時用）
+  uint32_t applyAt;      // 要在 Master 的哪個時間點套用
+} Packet;
 
-struct_message incomingData;
+// 收到的封包先放進小佇列，在 loop() 中處理（callback 內不做複雜運算）
+#define RXQ 8
+Packet rxQueue[RXQ];
+volatile uint8_t rxHead = 0, rxTail = 0;
+
+// 現場狀態：fromState →（淡入）→ curState；pending 等待 applyAt
+State    fromState, curState, pendState;
+uint16_t curSeq = 0, pendSeq = 0;
+bool     hasCur = false, hasPending = false;
+uint32_t pendApplyAt = 0, pendFade = 0;
+uint32_t fadeStart = 0, fadeMs = 0;
 
 CRGB leds[NUM_LEDS];
 const byte DNS_PORT = 53;
@@ -108,27 +126,57 @@ unsigned long apRestartAt = 0;    // >0 時，到時間會用新設定重啟 AP
 uint32_t parseHex(String s) { s.replace("#", ""); return strtoul(s.c_str(), NULL, 16); }
 CRGB lerpColor(uint32_t c1, uint32_t c2, float f) { CRGB a(c1), b(c2); return blend(a, b, f * 255); }
 
-void OnDataRecv(uint8_t *mac, uint8_t *incomingDataPtr, uint8_t len) {
-  if (len != sizeof(incomingData)) return;
-  memcpy(&incomingData, incomingDataPtr, sizeof(incomingData));
-  last_server_time = millis();
+void OnDataRecv(uint8_t *mac, uint8_t *data, uint8_t len) {
+  if (len != sizeof(Packet) || data[0] != PROTO_VER) return;   // 舊版 Master 的封包直接忽略
+  uint8_t next = (rxHead + 1) % RXQ;
+  if (next == rxTail) return;                                   // 佇列滿了就丟掉（心跳會補）
+  memcpy(&rxQueue[rxHead], data, sizeof(Packet));
+  rxHead = next;
+}
 
-  if (incomingData.targetGroup == 0 || incomingData.targetGroup == cfg.group) {
-    server_state.mode       = incomingData.mode;
-    server_state.brightness = incomingData.brightness;
-    server_state.bpm        = incomingData.bpm;
-    server_state.color      = incomingData.color;
-    server_state.speed      = incomingData.speed;
-    server_state.spread     = incomingData.spread;
-    server_state.duty       = incomingData.duty;
-    for (int i = 0; i < 4; i++) server_state.pal[i] = incomingData.pal[i];
-    timeOffset = incomingData.timestamp - millis();
+uint32_t masterNow() { return millis() + timeOffset; }
+
+void processPackets() {
+  while (rxTail != rxHead) {
+    Packet &p = rxQueue[rxTail];
+    last_server_time = millis();
+    timeOffset = (long)(p.timestamp - millis());     // 任何封包都可以用來校時
+
+    if (p.targetGroup == 0 || p.targetGroup == cfg.group) {
+      bool known = (hasCur && p.seq == curSeq) || (hasPending && p.seq == pendSeq);
+      if (!known) {
+        pendState.mode       = p.mode;
+        pendState.brightness = p.brightness;
+        pendState.bpm        = p.bpm;
+        pendState.color      = p.color;
+        pendState.speed      = p.speed;
+        pendState.spread     = p.spread;
+        pendState.duty       = p.duty;
+        for (int i = 0; i < 4; i++) pendState.pal[i] = p.pal[i];
+        pendSeq = p.seq;
+        pendApplyAt = p.applyAt;
+        pendFade = p.fadeMs;
+        hasPending = true;
+      }
+    }
+    rxTail = (rxTail + 1) % RXQ;
+  }
+
+  // 到了指定時間才切換 → 所有群組同一瞬間變化
+  if (hasPending && (int32_t)(masterNow() - pendApplyAt) >= 0) {
+    fromState = hasCur ? curState : pendState;
+    curState  = pendState;
+    curSeq    = pendSeq;
+    fadeStart = pendApplyAt;          // 以 Master 時間計算，晚開機的手燈也會停在正確進度
+    fadeMs    = hasCur ? pendFade : 0;
+    hasCur = true;
+    hasPending = false;
   }
 }
 
-void render(State *st, bool useSyncTime) {
-  FastLED.setBrightness(st->brightness);
-  uint32_t now = useSyncTime ? (millis() + timeOffset) : millis();
+// 把狀態畫到 out[]（含亮度），now 為毫秒時間
+void render(const State *st, uint32_t now, CRGB *out) {
+  CRGB *leds = out;
 
   uint32_t color = st->color;
   uint16_t bpm   = st->bpm;
@@ -179,6 +227,25 @@ void render(State *st, bool useSyncTime) {
         fill_solid(leds, NUM_LEDS, c);
       } break;
     default: fill_solid(leds, NUM_LEDS, CRGB(color)); break;
+  }
+  nscale8_video(out, NUM_LEDS, st->brightness);
+}
+
+CRGB fadeBuf[NUM_LEDS];
+
+void renderServer() {
+  uint32_t now = masterNow();
+  if (!hasCur) { fill_solid(leds, NUM_LEDS, CRGB::Black); return; }
+  render(&curState, now, leds);
+  if (fadeMs > 0) {
+    int32_t el = (int32_t)(now - fadeStart);
+    if (el < (int32_t)fadeMs) {
+      render(&fromState, now, fadeBuf);
+      uint8_t k = el <= 0 ? 0 : (uint8_t)((uint32_t)el * 255 / fadeMs);
+      for (int i = 0; i < NUM_LEDS; i++) leds[i] = blend(fadeBuf[i], leds[i], k);
+    } else {
+      fadeMs = 0;
+    }
   }
 }
 
@@ -714,7 +781,7 @@ void setup() {
   loadConfig();
 
   FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS);
-  FastLED.setBrightness(255);
+  FastLED.setBrightness(255);   // 亮度改在 render() 內處理（淡入時兩種亮度才能正確混合）
 
   WiFi.mode(WIFI_AP_STA);
   startAP();
@@ -740,6 +807,7 @@ void setup() {
 void loop() {
   dnsServer.processNextRequest();
   server.handleClient();
+  processPackets();
 
   if (apRestartAt && (long)(millis() - apRestartAt) >= 0) {
     apRestartAt = 0;
@@ -747,8 +815,9 @@ void loop() {
     startAP();   // 頻道不變，ESP-NOW 不受影響
   }
 
-  is_server_online = (millis() - last_server_time < 5000) && last_server_time != 0;
-  render(is_server_online ? &server_state : &web_state, is_server_online);
+  is_server_online = last_server_time != 0 && (millis() - last_server_time < 5000);
+  if (is_server_online) renderServer();
+  else render(&web_state, millis(), leds);
   FastLED.show();
-  delay(15);
+  delay(10);
 }

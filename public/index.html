@@ -10,7 +10,11 @@
 <body>
 
 <header class="bar">
-  <div class="brand">ESC CONTROL<small>LIGHTSTICK · ESP-NOW</small></div>
+  <div class="brand">ESC CONTROL<small>LIGHTSTICK · ESP-NOW · v3</small></div>
+  <div class="seg" role="tablist" aria-label="輸出模式">
+    <button id="segPrev" class="on" title="調整只影響預覽，按 GO 才送出">PREVIEW</button>
+    <button id="segLive" class="live" title="所有調整直接送到手燈（L 鍵切換）">● LIVE</button>
+  </div>
   <div class="conn">
     <select id="portSelect" aria-label="Serial Port"><option>讀取中…</option></select>
     <button class="btn icon" id="refreshBtn" title="重新整理 Port" aria-label="重新整理 Port">↻</button>
@@ -20,218 +24,385 @@
 </header>
 
 <main class="grid">
-  <!-- ========== 左：預覽 + 群組 ========== -->
-  <section class="left">
-    <div class="panel stage">
-      <span class="tag">PREVIEW</span>
-      <span class="tgt" id="tgt">→ 全部</span>
-      <div class="orb" id="orb"></div>
-      <div class="leds" id="leds"><b></b><b></b><b></b><b></b></div>
+  <!-- ================= 場景庫 ================= -->
+  <aside class="panel scenes">
+    <p class="label">場景 <span class="sp"><kbd>1–9</kbd> 載入 · <kbd>⇧</kbd>+數字 直接上</span></p>
+    <div class="slist" id="slist"></div>
+    <button class="btn add" id="addScene">＋ 將預覽存成場景</button>
+  </aside>
+
+  <section class="col">
+    <!-- ================= 預覽 / 現場 ================= -->
+    <div class="panel mon">
+      <div>
+        <div class="rowlab">PREVIEW 預覽
+          <span class="sp">
+            <button class="btn sm" id="selAll" title="A">全選 <kbd>A</kbd></button>
+            <button class="btn sm" id="fromLive" title="把現場的狀態複製回預覽">從現場複製</button>
+          </span>
+        </div>
+        <div class="strip" id="prevStrip"></div>
+        <div class="sep"></div>
+        <div class="rowlab"><i class="dot"></i>現場 ON AIR <span class="sp" id="onairName" style="font-family:var(--sans);letter-spacing:0;color:var(--tx)"></span></div>
+        <div class="strip prog" id="progStrip"></div>
+      </div>
+      <div class="gobox">
+        <button class="go idle" id="goBtn">GO<small id="goSub">沒有變更</small></button>
+        <div class="fade"><span>淡入</span><input id="fade" type="range" min="0" max="3000" step="100" value="0"><span class="v" id="fadeV">0s</span></div>
+      </div>
     </div>
 
+    <!-- ================= 編輯器 ================= -->
     <div class="panel">
-      <p class="label">控制群組 <b id="gidLabel">全部</b></p>
-      <div class="groups" id="groups"></div>
+      <p class="label">編輯 <b id="edTarget">G1</b></p>
+      <div class="ed">
+        <div>
+          <div class="modes">
+            <button class="m" data-m="1"><kbd>Q</kbd>恆亮</button>
+            <button class="m" data-m="2"><kbd>W</kbd>呼吸</button>
+            <button class="m" data-m="3"><kbd>E</kbd>彩虹</button>
+            <button class="m" data-m="4"><kbd>R</kbd>窗口</button>
+            <button class="m" data-m="5"><kbd>T</kbd>節拍</button>
+            <button class="m" data-m="7"><kbd>Y</kbd>漸變</button>
+            <button class="m off" data-m="0"><kbd>X</kbd>關閉 OFF</button>
+          </div>
+          <div class="hint" id="edHint">點上方的群組選擇要編輯的對象，按住 Ctrl / ⌘ 可多選。</div>
+        </div>
+        <div class="rows">
+          <div class="row"><label for="bri">亮度</label><input id="bri" type="range" min="0" max="255"><span class="v" id="briV"></span></div>
+          <div class="row bpm" data-for="2 5"><label for="bpm">BPM</label><input id="bpm" type="range" min="40" max="200"><span class="v" id="bpmV"></span>
+            <button class="tap" id="tapBtn">TAP<kbd>SPACE</kbd></button></div>
+          <div class="row" data-for="3 4 7"><label for="spd">速度</label><input id="spd" type="range" min="0" max="300"><span class="v" id="spdV"></span></div>
+          <div class="row" data-for="3 4"><label for="spr">展開</label><input id="spr" type="range" min="0" max="100"><span class="v" id="sprV"></span></div>
+          <div class="row" data-for="5"><label for="dty">亮佔比</label><input id="dty" type="range" min="5" max="95"><span class="v" id="dtyV"></span></div>
+          <div class="row col" data-for="1 2 4 5"><label>主色</label><div class="swatches" id="mainSw"></div></div>
+          <div class="row col" data-for="7"><label>色盤</label><div class="swatches" id="palSw"></div></div>
+        </div>
+      </div>
     </div>
 
     <div class="keys">
-      <kbd>1</kbd>–<kbd>6</kbd> 切換模式　<kbd>0</kbd> 關閉　<kbd>Space</kbd> Tap BPM
-    </div>
-  </section>
-
-  <!-- ========== 右：模式 + 參數 ========== -->
-  <section class="right">
-    <div class="panel">
-      <p class="label">模式</p>
-      <div class="modes">
-        <button class="m" data-m="1"><kbd>1</kbd>恆亮</button>
-        <button class="m" data-m="2"><kbd>2</kbd>呼吸</button>
-        <button class="m" data-m="3"><kbd>3</kbd>彩虹</button>
-        <button class="m" data-m="4"><kbd>4</kbd>窗口</button>
-        <button class="m" data-m="5"><kbd>5</kbd>節拍</button>
-        <button class="m" data-m="7"><kbd>6</kbd>漸變</button>
-        <button class="m off on" data-m="0"><kbd>0</kbd>關閉 OFF</button>
-      </div>
-    </div>
-
-    <div class="panel">
-      <p class="label">參數</p>
-      <div class="rows">
-        <div class="row"><label for="bri">亮度</label><input id="bri" type="range" min="0" max="255" value="200"><span class="v" id="briV">78%</span></div>
-        <div class="row bpm" data-for="2 5"><label for="bpm">BPM</label><input id="bpm" type="range" min="40" max="200" value="120"><span class="v" id="bpmV">120</span>
-          <button class="tap" id="tapBtn">TAP<kbd>SPACE</kbd></button></div>
-        <div class="row" data-for="3 4 7"><label for="spd">速度</label><input id="spd" type="range" min="0" max="300" value="120"><span class="v" id="spdV">1.2</span></div>
-        <div class="row" data-for="3 4"><label for="spr">展開</label><input id="spr" type="range" min="0" max="100" value="60"><span class="v" id="sprV">60</span></div>
-        <div class="row" data-for="5"><label for="dty">亮佔比</label><input id="dty" type="range" min="5" max="95" value="50"><span class="v" id="dtyV">50%</span></div>
-        <div class="row col" data-for="1 2 4 5"><label>主色</label><div class="swatches" id="mainSw"></div></div>
-        <div class="row col" data-for="7"><label>色盤</label><div class="swatches" id="palSw"></div></div>
-      </div>
+      <span><kbd>Enter</kbd>GO</span><span><kbd>L</kbd>切換 LIVE</span><span><kbd>A</kbd>全選</span>
+      <span><kbd>Q</kbd>–<kbd>Y</kbd>模式</span><span><kbd>X</kbd>關閉</span><span><kbd>Space</kbd>Tap BPM</span>
+      <span><kbd>1</kbd>–<kbd>9</kbd>載入場景</span><span><kbd>⇧</kbd>+<kbd>1</kbd>–<kbd>9</kbd>場景直接上</span>
     </div>
   </section>
 </main>
 
+<div class="dlg" id="dlg"><div class="box">
+  <h3 id="dlgT"></h3><p id="dlgP"></p>
+  <input type="text" id="dlgIn" maxlength="24" autocomplete="off">
+  <div class="acts"><button class="btn" id="dlgNo">取消</button><button class="btn primary" id="dlgOk">確定</button></div>
+</div></div>
 <div class="toast" id="toast"></div>
 
 <script>
 const $=s=>document.querySelector(s),$$=s=>document.querySelectorAll(s);
+const NG=10, GIDS=[1,2,3,4,5,6,7,8,9,10];
 const PRESET=['00ccff','ff0044','ffd400','3ddc97','b14cff','ffffff'];
-let st={gid:0,mode:0,bri:200,bpm:120,col:'00ccff',spd:1.2,spr:0.6,dty:0.5,p:['ff0044','ffd400','00e5ff','ffffff']};
-let connected=false;
+const MODE_NAME={0:'關閉',1:'恆亮',2:'呼吸',3:'彩虹',4:'窗口',5:'節拍',7:'漸變'};
+const defState=()=>({mode:0,bri:200,bpm:120,col:'00ccff',spd:1.2,spr:.6,dty:.5,p:['ff0044','ffd400','00e5ff','ffffff']});
+const clone=o=>JSON.parse(JSON.stringify(o));
+const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+
+// prev[g] = 預覽中的狀態；prog[g] = 現場（手燈上）的狀態
+let prev={},prog={},progFrom={},progT0={},progFade={};
+GIDS.forEach(g=>{prev[g]=defState();prog[g]=defState();progFrom[g]=defState();progT0[g]=0;progFade[g]=0;});
+let sel=new Set([1]),live=false,connected=false,fadeMs=0;
+let scenes=[],loadedScene=null,onairScene=null;
 
 function toast(t,err){const e=$('#toast');e.textContent=t;e.classList.toggle('err',!!err);e.classList.add('on');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('on'),2400);}
 function setStatus(text,cls){const s=$('#status');s.className='pill'+(cls?' '+cls:'');s.querySelector('span').textContent=text;}
 
-/* ---------- Serial 連線 ---------- */
+/* ================= API（server.js 不在時自動使用模擬後端） ================= */
+let MOCK=false,apiOk=false;
+async function api(path,opt){
+  if(MOCK)return mockApi(path,opt);
+  try{const r=await fetch(path,opt);const j=await r.json();apiOk=true;return j;}
+  catch(e){
+    // 從未連上過 server.js（例如直接打開 HTML 預覽）→ 切到模擬模式，並在狀態列明確標示
+    if(!apiOk){MOCK=true;setStatus('模擬模式 · 未偵測到 server.js','err');return mockApi(path,opt);}
+    throw e;
+  }
+}
+const json=b=>({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+function mockApi(path,opt){
+  if(path==='/api/ports')return [{path:'COM3',manufacturer:'模擬'}];
+  if(path==='/api/connect'||path==='/api/disconnect'||path==='/api/go')return {success:true};
+  if(path==='/api/program')return {groups:null};
+  if(path==='/api/scenes')return opt&&opt.method==='PUT'?{success:true}:mockScenes();
+  return {};
+}
+function mockScenes(){
+  const mk=(name,fade,fn)=>({id:Math.random().toString(36).slice(2,8),name,fade,groups:GIDS.map(g=>Object.assign(defState(),fn(g)))});
+  return [
+    mk('開場 · 全場藍呼吸',1000,()=>({mode:2,col:'00ccff',bpm:70})),
+    mk('副歌 · 彩虹',0,()=>({mode:3,spd:1.5,spr:.8})),
+    mk('左右對打 · 紅藍',0,g=>({mode:5,col:g<=5?'ff0044':'00ccff',bpm:128})),
+    mk('安可 · 漸變',2000,()=>({mode:7,spd:.6})),
+    mk('全暗',500,()=>({mode:0})),
+  ];
+}
+
+/* ================= Serial ================= */
 async function loadPorts(){
-  const sel=$('#portSelect');sel.innerHTML='<option>讀取中…</option>';
-  try{
-    const ports=await (await fetch('/api/ports')).json();
-    sel.innerHTML='';
-    if(!ports.length){sel.innerHTML='<option value="">找不到裝置</option>';return;}
-    ports.forEach(p=>{const o=document.createElement('option');o.value=p.path;o.text=p.path+(p.manufacturer?` · ${p.manufacturer}`:'');sel.add(o);});
-  }catch(e){sel.innerHTML='<option value="">讀取失敗</option>';}
+  const s=$('#portSelect');s.innerHTML='<option>讀取中…</option>';
+  try{const ports=await api('/api/ports');s.innerHTML='';
+    if(!ports.length){s.innerHTML='<option value="">找不到裝置</option>';return;}
+    ports.forEach(p=>{const o=document.createElement('option');o.value=p.path;o.text=p.path+(p.manufacturer?` · ${p.manufacturer}`:'');s.add(o);});
+  }catch(e){s.innerHTML='<option value="">讀取失敗</option>';}
 }
 async function connectPort(){
-  const path=$('#portSelect').value,btn=$('#connBtn');
-  if(!path)return toast('請先選擇 Port',true);
-  btn.disabled=true;btn.textContent='連線中…';
-  try{
-    const r=await (await fetch('/api/connect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path,baudRate:115200})})).json();
-    if(r.success){connected=true;setStatus('已連線 · '+path,'on');doSend();}
+  const path=$('#portSelect').value,b=$('#connBtn');if(!path)return toast('請先選擇 Port',true);
+  b.disabled=true;b.textContent='連線中…';
+  try{const r=await api('/api/connect',json({path,baudRate:115200}));
+    if(r.success){connected=true;setStatus('已連線 · '+path+(MOCK?'（模擬）':''),'on');pushProgram();}
     else{setStatus('連線失敗','err');toast('連線失敗：'+(r.error||''),true);}
   }catch(e){setStatus('連線失敗','err');toast('錯誤：'+e,true);}
   syncConnBtn();
 }
 async function disconnectPort(){
-  const btn=$('#connBtn');btn.disabled=true;btn.textContent='斷線中…';
-  try{await fetch('/api/disconnect',{method:'POST'});}catch(e){toast('斷線錯誤：'+e,true);}
+  const b=$('#connBtn');b.disabled=true;b.textContent='斷線中…';
+  try{await api('/api/disconnect',{method:'POST'});}catch(e){}
   connected=false;setStatus('未連線');syncConnBtn();
 }
-function syncConnBtn(){
-  const b=$('#connBtn');b.disabled=false;
-  b.textContent=connected?'斷線':'連線';
-  b.className='btn '+(connected?'danger':'primary');
-  $('#portSelect').disabled=connected;$('#refreshBtn').disabled=connected;
-}
+function syncConnBtn(){const b=$('#connBtn');b.disabled=false;b.textContent=connected?'斷線':'連線';b.className='btn '+(connected?'danger':'primary');
+  $('#portSelect').disabled=connected;$('#refreshBtn').disabled=connected;}
 $('#connBtn').onclick=()=>connected?disconnectPort():connectPort();
 $('#refreshBtn').onclick=loadPorts;
 
-/* ---------- 送出指令（節流：每 60ms 最多一次，保證最後一個值送出） ---------- */
-let sendT=0,sendPend=false;
-function send(){
-  if(!connected)return;
-  if(sendT){sendPend=true;return;}
-  doSend();
-  sendT=setTimeout(function f(){if(sendPend){sendPend=false;doSend();sendT=setTimeout(f,60);}else sendT=0;},60);
-}
-function doSend(){
-  fetch('/api/send',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({gid:st.gid,mode:st.mode,bri:st.bri,bpm:st.bpm,color:st.col,speed:st.spd,spread:st.spr,duty:st.dty,pal:st.p})})
-  .then(r=>{if(!r.ok)throw 0;}).catch(()=>{if(connected){setStatus('傳送失敗','err');}});
-}
-
-/* ---------- 群組 ---------- */
-function drawGroups(){
-  const g=$('#groups');g.innerHTML='';
-  for(let i=0;i<=10;i++){
-    const b=document.createElement('button');b.textContent=i?'G'+i:'全部';
-    b.className=(i?'':'all ')+(i===st.gid?'on':'');
-    b.onclick=()=>{st.gid=i;drawGroups();send();};g.appendChild(b);
+/* ================= GO ================= */
+function dirtyGroups(){return GIDS.filter(g=>!same(prev[g],prog[g]));}
+async function go(groups,fade,silent){
+  groups=groups||dirtyGroups();
+  if(!groups.length){if(!silent)toast('預覽和現場一樣，沒有需要送出的變更');return;}
+  if(!connected&&!silent)toast('尚未連線：只更新畫面上的現場預覽',true);
+  const f=fade==null?fadeMs:fade;
+  const now=performance.now();
+  groups.forEach(g=>{progFrom[g]=currentProg(g,now);progT0[g]=now;progFade[g]=f;prog[g]=clone(prev[g]);});
+  onairScene=(loadedScene&&GIDS.every(g=>same(prev[g],loadedScene.groups[g-1])))?loadedScene.id:null;
+  if(!live){const b=$('#goBtn');b.classList.remove('flash');void b.offsetWidth;b.classList.add('flash');}
+  refresh();
+  if(connected){
+    try{const r=await api('/api/go',json({fade:f,slots:groups.map(g=>Object.assign({gid:g},prog[g]))}));
+      if(r&&r.success===false)throw r.error;
+    }catch(e){setStatus('傳送失敗','err');toast('傳送失敗：'+e,true);}
   }
-  const t=st.gid?'G'+st.gid:'全部';$('#gidLabel').textContent=t;$('#tgt').textContent='→ '+t;
+}
+$('#goBtn').onclick=()=>{if(!live)go();};
+// 剛連線時：把畫面上的「現場」狀態完整送一次，確保手燈和畫面一致
+async function pushProgram(){
+  try{await api('/api/go',json({fade:0,slots:GIDS.map(g=>Object.assign({gid:g},prog[g]))}));}
+  catch(e){toast('同步現場狀態失敗：'+e,true);}
 }
 
-/* ---------- 模式 ---------- */
-function setMode(m){
-  st.mode=m;
-  $$('.m').forEach(b=>b.classList.toggle('on',+b.dataset.m===m));
-  $$('.row[data-for]').forEach(r=>r.hidden=!r.dataset.for.split(' ').includes(String(m)));
-  send();
+// LIVE：調整後直接送出（節流 60ms，保證最後一個值送出）
+let liveT=0,livePend=false;
+function liveSend(){
+  if(!live)return;
+  if(liveT){livePend=true;return;}
+  go(null,0,true);
+  liveT=setTimeout(function f(){if(livePend){livePend=false;go(null,0,true);liveT=setTimeout(f,60);}else liveT=0;},60);
 }
-$$('.m').forEach(b=>b.onclick=()=>setMode(+b.dataset.m));
+function setLive(on){
+  live=on;document.body.classList.toggle('is-live',on);
+  $('#segLive').classList.toggle('on',on);$('#segPrev').classList.toggle('on',!on);
+  if(on&&dirtyGroups().length)go(null,null,true);
+  refresh();
+}
+$('#segPrev').onclick=()=>setLive(false);
+$('#segLive').onclick=()=>setLive(true);
 
-/* ---------- 滑桿 ---------- */
+/* ================= 群組選擇 ================= */
+function buildStrips(){
+  const ps=$('#prevStrip'),gs=$('#progStrip');ps.innerHTML=gs.innerHTML='';
+  GIDS.forEach(g=>{
+    const t=document.createElement('button');t.className='tile';t.dataset.g=g;t.innerHTML=`<div class="o"></div><span>G${g}</span>`;
+    t.onclick=e=>{
+      if(e.ctrlKey||e.metaKey||e.shiftKey){sel.has(g)&&sel.size>1?sel.delete(g):sel.add(g);}else sel=new Set([g]);
+      refresh();
+    };ps.appendChild(t);
+    const p=document.createElement('div');p.className='tile';p.dataset.g=g;p.innerHTML=`<div class="o"></div><span>G${g}</span>`;gs.appendChild(p);
+  });
+}
+$('#selAll').onclick=()=>{sel=new Set(GIDS);refresh();};
+$('#fromLive').onclick=()=>{GIDS.forEach(g=>prev[g]=clone(prog[g]));loadedScene=null;refresh();toast('已將現場狀態複製到預覽');};
+
+/* ================= 編輯器 ================= */
+const first=()=>prev[[...sel].sort((a,b)=>a-b)[0]];
+function edit(k,v){sel.forEach(g=>prev[g][k]=v);refresh();liveSend();}
 function fill(el){el.style.setProperty('--p',((el.value-el.min)/(el.max-el.min)*100)+'%');}
 const SL={
-  bri:[v=>st.bri=v,v=>Math.round(v/2.55)+'%'],
-  bpm:[v=>st.bpm=v,v=>v],
-  spd:[v=>st.spd=v/100,v=>(v/100).toFixed(1)],
-  spr:[v=>st.spr=v/100,v=>v],
-  dty:[v=>st.dty=v/100,v=>v+'%'],
+  bri:{get:s=>s.bri,set:v=>v,show:v=>Math.round(v/2.55)+'%'},
+  bpm:{get:s=>s.bpm,set:v=>v,show:v=>v},
+  spd:{get:s=>Math.round(s.spd*100),set:v=>v/100,show:v=>(v/100).toFixed(1)},
+  spr:{get:s=>Math.round(s.spr*100),set:v=>v/100,show:v=>v},
+  dty:{get:s=>Math.round(s.dty*100),set:v=>v/100,show:v=>v+'%'},
 };
-for(const k in SL){const el=$('#'+k);fill(el);el.oninput=()=>{SL[k][0](+el.value);$('#'+k+'V').textContent=SL[k][1](+el.value);fill(el);send();};}
+for(const k in SL){const el=$('#'+k);el.oninput=()=>{$('#'+k+'V').textContent=SL[k].show(+el.value);fill(el);edit(k,SL[k].set(+el.value));};}
+function setMode(m){edit('mode',m);}
+$$('.m').forEach(b=>b.onclick=()=>setMode(+b.dataset.m));
 
-/* ---------- Tap BPM ---------- */
 const taps=[];
 function tap(){
   const b=$('#tapBtn');b.classList.add('hit');setTimeout(()=>b.classList.remove('hit'),100);
-  const t=performance.now();
-  if(taps.length&&t-taps[taps.length-1]>2000)taps.length=0;
+  const t=performance.now();if(taps.length&&t-taps[taps.length-1]>2000)taps.length=0;
   taps.push(t);while(taps.length>5)taps.shift();
-  if(taps.length>=2){
-    const d=taps.slice(1).map((x,i)=>x-taps[i]);
-    const bpm=Math.max(40,Math.min(200,Math.round(60000/(d.reduce((a,b)=>a+b)/d.length))));
-    $('#bpm').value=bpm;$('#bpm').oninput();
-  }
+  if(taps.length>=2){const d=taps.slice(1).map((x,i)=>x-taps[i]);
+    const bpm=Math.max(40,Math.min(200,Math.round(60000/(d.reduce((a,b)=>a+b)/d.length))));edit('bpm',bpm);}
 }
 $('#tapBtn').onclick=tap;
 
-/* ---------- 顏色 ---------- */
-function setAccent(){document.documentElement.style.setProperty('--c','#'+st.col);}
 function colorInput(hex,onPick){const i=document.createElement('input');i.type='color';i.value='#'+hex;i.oninput=()=>onPick(i.value.slice(1));return i;}
-function drawMain(){
+function drawColors(s){
   const w=$('#mainSw');w.innerHTML='';
-  PRESET.forEach(h=>{const s=document.createElement('button');s.className='sw'+(h===st.col?' cur':'');s.style.background='#'+h;s.title='#'+h;
-    s.onclick=()=>{st.col=h;setAccent();drawMain();send();};w.appendChild(s);});
-  const custom=!PRESET.includes(st.col);
-  const c=document.createElement('label');c.className='sw'+(custom?' cur':'');c.title='自訂顏色';
-  c.style.background=custom?'#'+st.col:'conic-gradient(red,yellow,lime,cyan,blue,magenta,red)';
-  c.appendChild(colorInput(custom?st.col:'888888',h=>{st.col=h;c.style.background='#'+h;setAccent();send();}));
-  c.querySelector('input').onchange=drawMain;
-  w.appendChild(c);
-}
-function drawPal(){
-  const w=$('#palSw');w.innerHTML='';
-  st.p.forEach((h,i)=>{const c=document.createElement('label');c.className='sw';c.style.background='#'+h;
-    c.appendChild(colorInput(h,v=>{st.p[i]=v;c.style.background='#'+v;send();}));w.appendChild(c);});
+  PRESET.forEach(h=>{const b=document.createElement('button');b.className='sw'+(h===s.col?' cur':'');b.style.background='#'+h;b.title='#'+h;b.onclick=()=>edit('col',h);w.appendChild(b);});
+  const custom=!PRESET.includes(s.col);const c=document.createElement('label');c.className='sw'+(custom?' cur':'');c.title='自訂顏色';
+  c.style.background=custom?'#'+s.col:'conic-gradient(red,yellow,lime,cyan,blue,magenta,red)';
+  c.appendChild(colorInput(custom?s.col:'888888',h=>{c.style.background='#'+h;edit('col',h);}));w.appendChild(c);
+  const pw=$('#palSw');pw.innerHTML='';
+  s.p.forEach((h,i)=>{const l=document.createElement('label');l.className='sw';l.style.background='#'+h;
+    l.appendChild(colorInput(h,v=>{l.style.background='#'+v;sel.forEach(g=>prev[g].p[i]=v);refresh(true);liveSend();}));pw.appendChild(l);});
 }
 
-/* ---------- 鍵盤快捷鍵 ---------- */
-const KEYMAP={'1':1,'2':2,'3':3,'4':4,'5':5,'6':7,'0':0};
-document.addEventListener('keydown',e=>{
-  if(e.target.matches('select,input[type=color]')||e.ctrlKey||e.metaKey||e.altKey)return;
-  if(e.code==='Space'){e.preventDefault();if(!e.repeat)tap();return;}
-  if(e.key in KEYMAP&&!e.repeat){setMode(KEYMAP[e.key]);}
-});
+/* ================= 場景 ================= */
+async function loadScenes(){try{scenes=await api('/api/scenes');}catch(e){scenes=[];toast('讀取場景失敗',true);}drawScenes();}
+async function saveScenes(){try{await api('/api/scenes',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(scenes)});}catch(e){toast('儲存場景失敗',true);}}
+function sceneColor(s){return s.mode===0?'#000':s.mode===3?'conic-gradient(red,yellow,lime,cyan,blue,magenta,red)':s.mode===7?`linear-gradient(135deg,#${s.p[0]},#${s.p[2]})`:'#'+s.col;}
+function drawScenes(){
+  const L=$('#slist');L.innerHTML='';
+  if(!scenes.length){L.innerHTML='<div class="empty">還沒有場景。<br>在預覽調好後按下方按鈕儲存。</div>';return;}
+  scenes.forEach((sc,i)=>{
+    const d=document.createElement('div');
+    d.className='scene'+(loadedScene&&loadedScene.id===sc.id?' loaded':'')+(onairScene===sc.id?' onair':'');
+    d.innerHTML=`<div class="k">${i<9?i+1:''}</div>
+      <div style="min-width:0"><div class="nm"></div><div class="dots">${sc.groups.map(s=>`<i style="background:${sceneColor(s)}"></i>`).join('')}</div>
+      <div class="meta">${sc.fade?'淡入 '+(sc.fade/1000)+'s':'直接切'}</div></div>
+      <button class="more" title="更多">⋯</button>`;
+    d.querySelector('.nm').textContent=sc.name;
+    d.onclick=e=>{if(e.target.closest('.more,.menu'))return;loadScene(i,e.shiftKey);};
+    d.querySelector('.more').onclick=e=>{e.stopPropagation();openMenu(d,i);};
+    L.appendChild(d);
+  });
+}
+function loadScene(i,andGo){
+  const sc=scenes[i];if(!sc)return;
+  GIDS.forEach(g=>prev[g]=Object.assign(defState(),clone(sc.groups[g-1])));
+  loadedScene=sc;setFade(sc.fade||0);
+  if(andGo||live)go(null,sc.fade||0,live);else toast(`已載入「${sc.name}」到預覽，按 GO 送出`);
+  refresh();
+}
+function openMenu(d,i){
+  closeMenu();const m=document.createElement('div');m.className='menu';
+  m.innerHTML=`<button data-a="go">直接送上現場</button><button data-a="over">用目前預覽覆寫</button><button data-a="ren">重新命名</button>
+    <button data-a="up">往上移</button><button data-a="del" class="del">刪除</button>`;
+  m.onclick=async e=>{const a=e.target.dataset.a;closeMenu();const sc=scenes[i];
+    if(a==='go')loadScene(i,true);
+    if(a==='over'){sc.groups=GIDS.map(g=>clone(prev[g]));sc.fade=fadeMs;await saveScenes();drawScenes();toast(`已覆寫「${sc.name}」`);}
+    if(a==='ren'){const n=await ask('重新命名','',sc.name);if(n){sc.name=n;await saveScenes();drawScenes();}}
+    if(a==='up'&&i>0){[scenes[i-1],scenes[i]]=[scenes[i],scenes[i-1]];await saveScenes();drawScenes();}
+    if(a==='del'){const ok=await ask(`刪除「${sc.name}」？`,'刪除後無法復原。',null);if(ok){scenes.splice(i,1);if(loadedScene===sc)loadedScene=null;await saveScenes();drawScenes();}}
+  };
+  d.appendChild(m);setTimeout(()=>document.addEventListener('click',closeMenu,{once:true}),0);
+}
+function closeMenu(){$$('.menu').forEach(m=>m.remove());}
+$('#addScene').onclick=async()=>{
+  const n=await ask('儲存場景','會儲存預覽中全部 10 個群組的狀態和目前的淡入時間。',`場景 ${scenes.length+1}`);
+  if(!n)return;const sc={id:Date.now().toString(36),name:n,fade:fadeMs,groups:GIDS.map(g=>clone(prev[g]))};
+  scenes.push(sc);loadedScene=sc;await saveScenes();drawScenes();toast(`已儲存「${n}」`);
+};
 
-/* ---------- 預覽（與韌體 render() 相同公式；群組 0 與指定群組同效果） ---------- */
+// 簡易對話框：value=null 時為確認框
+function ask(title,desc,value){return new Promise(res=>{
+  $('#dlgT').textContent=title;$('#dlgP').textContent=desc;$('#dlgP').style.display=desc?'':'none';
+  const inp=$('#dlgIn');inp.style.display=value==null?'none':'';inp.value=value||'';
+  $('#dlg').classList.add('on');if(value!=null)setTimeout(()=>{inp.focus();inp.select();},30);
+  const done=v=>{$('#dlg').classList.remove('on');$('#dlgOk').onclick=$('#dlgNo').onclick=inp.onkeydown=null;res(v);};
+  $('#dlgOk').onclick=()=>done(value==null?true:inp.value.trim());
+  $('#dlgNo').onclick=()=>done(null);
+  inp.onkeydown=e=>{if(e.key==='Enter')$('#dlgOk').onclick();if(e.key==='Escape')done(null);};
+});}
+
+/* ================= 淡入 ================= */
+function setFade(v){fadeMs=v;const el=$('#fade');el.value=v;fill(el);$('#fadeV').textContent=(v/1000)+'s';}
+$('#fade').oninput=e=>setFade(+e.target.value);
+
+/* ================= 畫面同步 ================= */
+function refresh(skipColors){
+  const s=first(),ids=[...sel].sort((a,b)=>a-b);
+  document.documentElement.style.setProperty('--c','#'+(s.mode===0?'8A8A96':s.col));
+  $('#edTarget').textContent=ids.length===NG?'全部群組':ids.map(g=>'G'+g).join(' · ');
+  const modes=new Set(ids.map(g=>prev[g].mode));
+  $$('.m').forEach(b=>{const m=+b.dataset.m;b.classList.toggle('on',m===s.mode);b.classList.toggle('mixed',modes.size>1&&modes.has(m)&&m!==s.mode);});
+  $$('.row[data-for]').forEach(r=>r.hidden=!r.dataset.for.split(' ').includes(String(s.mode)));
+  for(const k in SL){const el=$('#'+k);el.value=SL[k].get(s);$('#'+k+'V').textContent=SL[k].show(+el.value);fill(el);}
+  $('#edHint').textContent=ids.length>1?`同時編輯 ${ids.length} 個群組：只會修改你動到的那一項，其他設定各自保留。`:'點上方的群組選擇要編輯的對象，按住 Ctrl / ⌘ 可多選。';
+  if(!skipColors)drawColors(s);
+  const dirty=dirtyGroups();
+  $$('#prevStrip .tile').forEach(t=>{const g=+t.dataset.g;t.classList.toggle('sel',sel.has(g));t.classList.toggle('dirty',dirty.includes(g));});
+  const gb=$('#goBtn');
+  if(live){gb.className='go';gb.firstChild.textContent='LIVE';$('#goSub').textContent='調整會直接送出';}
+  else{gb.className='go'+(dirty.length?'':' idle');gb.firstChild.textContent='GO';$('#goSub').textContent=dirty.length?`${dirty.length} 個群組變更 · Enter`:'沒有變更';}
+  const on=scenes.find(x=>x.id===onairScene);$('#onairName').textContent=on?on.name:'';
+  drawScenes();
+}
+
+/* ================= 燈效模擬（與韌體 render() 同公式） ================= */
 const hex2=h=>[parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];
 const sc=(c,k)=>c.map(x=>x*k);
 const hsv=h=>{const f=(n,k=(n+h*6)%6)=>255*(1-Math.max(Math.min(k,4-k,1),0));return[f(5),f(3),f(1)];};
 const lerp=(a,b,f)=>a.map((x,i)=>x+(b[i]-x)*f);
-const ledEls=$$('#leds b'),orb=$('#orb');
-function frame(now){
-  const N=4,out=[],c=hex2(st.col);
-  for(let i=0;i<N;i++){
-    let v=[0,0,0];
-    switch(st.mode){
+function renderLeds(s,now){
+  const N=4,c=hex2(s.col),out=[];
+  for(let i=0;i<N;i++){let v=[0,0,0];
+    switch(s.mode){
       case 1:v=c;break;
-      case 2:v=sc(c,Math.cos(2*Math.PI*(st.bpm/60000)*now)*.5+.5);break;
-      case 3:v=hsv(((now*.001*Math.max(.01,st.spd))+i*st.spr/N)%1);break;
-      case 4:{const p=(now*.001*Math.max(.01,st.spd))%1,h=Math.min(1,Math.max(.05,st.spr))/2;v=sc(c,Math.abs(i/(N-1)-p)<h?1:.1);}break;
-      case 5:v=sc(c,((now/60000)*st.bpm)%1<=st.dty?1:.05);break;
-      case 7:{const p=((now*.001*Math.max(.01,st.spd))%1)*4,a=Math.floor(p)%4;v=lerp(hex2(st.p[a]),hex2(st.p[(a+1)%4]),p-Math.floor(p));}break;
-    }
-    out.push(sc(v,st.bri/255));
-  }
-  const css=a=>`rgb(${a.map(Math.round).join(',')})`;
-  ledEls.forEach((b,i)=>{b.style.background=css(out[i]);b.style.boxShadow=`0 0 10px ${css(out[i])}`;});
-  orb.parentElement.style.setProperty('--o',css([0,1,2].map(k=>out.reduce((s,o)=>s+o[k],0)/N)));
+      case 2:v=sc(c,Math.cos(2*Math.PI*(s.bpm/60000)*now)*.5+.5);break;
+      case 3:v=hsv(((now*.001*Math.max(.01,s.spd))+i*s.spr/N)%1);break;
+      case 4:{const p=(now*.001*Math.max(.01,s.spd))%1,h=Math.min(1,Math.max(.05,s.spr))/2;v=sc(c,Math.abs(i/(N-1)-p)<h?1:.1);}break;
+      case 5:v=sc(c,((now/60000)*s.bpm)%1<=s.dty?1:.05);break;
+      case 7:{const p=((now*.001*Math.max(.01,s.spd))%1)*4,a=Math.floor(p)%4;v=lerp(hex2(s.p[a]),hex2(s.p[(a+1)%4]),p-Math.floor(p));}break;
+    }out.push(sc(v,s.bri/255));}
+  return out;
+}
+function currentProg(g,now){ // 回傳一個「凍結」狀態的近似：淡入中就用目標狀態
+  return clone(prog[g]);
+}
+const css=a=>`rgb(${a.map(Math.round).join(',')})`;
+const avg=L=>[0,1,2].map(k=>L.reduce((a,o)=>a+o[k],0)/L.length);
+function paint(t,L){ // 圓形切成 4 等份 = 4 顆 LED；光暈用平均色
+  const c=L.map(css);t.style.setProperty('--o',css(avg(L)));
+  t.style.setProperty('--g',`conic-gradient(from -45deg,${c[0]} 0 25%,${c[1]} 0 50%,${c[2]} 0 75%,${c[3]} 0)`);
+}
+function frame(now){
+  $$('#prevStrip .tile').forEach(t=>paint(t,renderLeds(prev[+t.dataset.g],now)));
+  $$('#progStrip .tile').forEach(t=>{const g=+t.dataset.g;let L=renderLeds(prog[g],now);
+    const f=progFade[g];if(f>0){const k=Math.min(1,(now-progT0[g])/f);if(k<1){const F=renderLeds(progFrom[g],now);L=L.map((v,i)=>lerp(F[i],v,k));}}
+    paint(t,L);});
   requestAnimationFrame(frame);
 }
 
-/* ---------- init ---------- */
-setAccent();drawGroups();drawMain();drawPal();setMode(0);syncConnBtn();loadPorts();requestAnimationFrame(frame);
+/* ================= 鍵盤 ================= */
+const MKEY={q:1,w:2,e:3,r:4,t:5,y:7,x:0};
+document.addEventListener('keydown',e=>{
+  if($('#dlg').classList.contains('on')||e.target.matches('input[type=text],select')||e.ctrlKey||e.metaKey||e.altKey)return;
+  const k=e.key.toLowerCase();
+  if(e.code==='Space'){e.preventDefault();if(!e.repeat)tap();return;}
+  if(e.key==='Enter'){e.preventDefault();if(!live&&!e.repeat)go();return;}
+  if(e.repeat)return;
+  if(/^Digit[1-9]$/.test(e.code)){e.preventDefault();loadScene(+e.code.slice(5)-1,e.shiftKey);return;}
+  if(k==='l')return setLive(!live);
+  if(k==='a'){sel=new Set(GIDS);return refresh();}
+  if(k in MKEY)setMode(MKEY[k]);
+});
+
+/* ================= init ================= */
+(async()=>{
+  buildStrips();setFade(0);refresh();requestAnimationFrame(frame);
+  loadPorts();await loadScenes();
+  try{const p=await api('/api/program');if(p&&p.groups){GIDS.forEach(g=>{prog[g]=Object.assign(defState(),p.groups[g-1]);prev[g]=clone(prog[g]);});}}catch(e){}
+  refresh();
+})();
 </script>
 </body>
 </html>

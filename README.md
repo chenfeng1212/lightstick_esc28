@@ -59,9 +59,19 @@ ESP-NOW 無線燈光控制系統是一套為演唱會與互動展演設計的高
 
 - Android 相容性優化: 針對 Android 系統優化 Captive Portal DNS 行為 (類 RFC 8908)，解決控制頁面無法彈出的問題。
 
-- 手機自助設定 (v2): 使用者可在手燈頁面修改 Wi-Fi 名稱 (SSID)、密碼與群組 ID，無需重新燒錄。已設定密碼時須輸入目前密碼才能修改。
+- 手機自助設定: 使用者可在手燈頁面修改 Wi-Fi 名稱 (SSID)、密碼與群組 ID，無需重新燒錄。已設定密碼時須輸入目前密碼才能修改。
 
-- 即時燈色預覽 (v2): 手機頁與電腦中控台皆以與韌體相同的公式即時模擬 4 顆 LED 的燈效。
+- 即時燈色預覽: 手機頁與電腦中控台皆以與韌體相同的公式即時模擬 4 顆 LED 的燈效。
+
+- 預覽 → GO: 在中控台的預覽區調整時手燈完全不受影響，按下 GO 才一次送上現場，觀眾不會看到調整過程。需要即時跟拍時可切換 LIVE 模式。
+
+- 多群組同步切換: 封包帶有「套用時間 (applyAt)」，所有群組在同一個 Master 時間點切換，不再有依序延遲。
+
+- 場景: 將 10 個群組的狀態與淡入時間存成場景，演出時按數字鍵即可切換。場景存在 `scenes.json`。
+
+- 淡入: 每次 GO 或每個場景可設定 0–3 秒淡入，手燈會將新舊效果混色過渡。
+
+- 心跳輪流補送: Master 記住 10 個群組的狀態並每 0.5 秒輪流補送，漏收或活動中才開機的手燈也會自動同步。
     
 ## 技術規格 (Technical Specifications)
 
@@ -85,44 +95,74 @@ ESP-NOW 無線燈光控制系統是一套為演唱會與互動展演設計的高
 
 - 通訊協定資料結構
  
-### 系統透過 ESP-NOW 傳輸固定大小的 C Struct：
+### 系統透過 ESP-NOW 傳輸固定大小的 C Struct（協定版本 3，52 bytes）：
+
+> Master、Gateway、手燈三者的 struct 必須完全相同。手燈會直接忽略 `ver` 不是 3 的封包（舊版韌體送出的封包）。
 
 | 欄位名稱 | 類型 | 說明 |
 |--------- | ------- | -------------------- |
-| msgId | uint8_t | 訊息序號，用於過濾重複封包 |
+| ver | uint8_t | 協定版本，目前為 3 |
+| msgId | uint8_t | 傳輸序號，Gateway 用來過濾重複封包 |
 | targetGroup | uint8_t | 目標群組 (0=全體, 1-10=特定群組) |
-| mode | uint8_t | 運作模式 (1=恆亮, 2=呼吸, 等) |
+| mode | uint8_t | 運作模式 (0=關閉, 1=恆亮, 2=呼吸, 3=彩虹, 4=窗口, 5=節拍, 7=漸變) |
+| brightness | uint8_t | 亮度 0–255 |
+| reserved | uint8_t | 保留 |
 | bpm | uint16_t | 節奏速率 (Beats Per Minute) |
+| fadeMs | uint16_t | 淡入時間 (毫秒) |
+| seq | uint16_t | 狀態版本；相同 seq 代表同一個狀態，手燈不會重新淡入 |
 | color | uint32_t | 主色代碼 (HEX) |
-| pal[4] | uint32_t | 4色漸變色盤 |
-| timestamp | uint32_t | 主系統時間戳記，用於同步運算 |
+| speed / spread / duty | float | 速度 / 展開 / 亮佔比 |
+| pal[4] | uint32_t | 4 色漸變色盤 |
+| timestamp | uint32_t | 送出當下的 Master 時間，用於校時 |
+| applyAt | uint32_t | 在 Master 的哪個時間點套用，用於多群組同步切換 |
+
+### Master 序列埠協定
+
+每行一個指令，以 `\n` 結尾：
+
+| 指令 | 說明 |
+|------|------|
+| `S,gid,mode,bri,bpm,color,spd,spr,dty,p1,p2,p3,p4` | 暫存群組狀態（gid 0 = 全部），不會立即送出 |
+| `GO,fadeMs` | 把暫存的群組一次送出，並指定淡入時間 |
+| `STOP` | 停止廣播與心跳 |
+| `gid,mode,bri,…,p4` | 舊格式，相容保留（等同 `S` + `GO,0`） |
+
+### 中控伺服器 API
+
+| 方法 | 路徑 | 說明 |
+|------|------|------|
+| GET | `/api/ports` | 列出序列埠 |
+| POST | `/api/connect` / `/api/disconnect` | 連線 / 斷線 |
+| POST | `/api/go` | `{ fade, slots:[{ gid, mode, bri, bpm, col, spd, spr, dty, p:[4] }] }` 一次送出多個群組 |
+| GET | `/api/program` | 目前現場狀態（重新整理頁面時用來還原） |
+| GET / PUT | `/api/scenes` | 讀取 / 覆寫 `scenes.json` |
+| POST | `/api/send` | 舊介面，單一群組立即送出 |
 
 ## 專案結構 (Project Structure)
 
 ```
 lightstick_esc28/
-├── server.js                  # Node.js 中控伺服器
+├── README.md
+├── package.json               # Node.js 相依套件
+├── server.js                  # 中控伺服器
+├── scenes.json                # 場景庫（第一次儲存場景時自動建立）
 ├── public/
-│   ├── index.html             # 電腦中控台介面 (v2)
-│   ├── style.css              # 中控台樣式 (v2)
-│   └── _v1_backup/            # 舊版介面與 README 備份
-├── Master_pro.ino             # 主發射節點
-├── Gateway_pro.ino            # 中繼節點
-├── light_now_pro.ino          # 終端燈具節點 (v1，舊版)
-└── light_now_v2/
-    ├── light_now_v2.ino       # 終端燈具節點 (v2，建議使用)
-    └── phone_ui_preview.html  # 手機頁原始檔，可直接用瀏覽器預覽
+│   ├── index.html             # 電腦中控台介面
+│   └── style.css
+└── firmware/
+    ├── master/master.ino      # 主發射節點
+    ├── gateway/gateway.ino    # 中繼節點（選配）
+    └── lightstick/
+        ├── lightstick.ino     # 終端燈具節點（含手機控制頁與 Wi-Fi 設定）
+        └── phone_ui_preview.html  # 手機頁原始檔，可直接用瀏覽器預覽
 ```
 
-> Arduino IDE 要求 `.ino` 必須放在同名資料夾中。燒錄 `Master_pro.ino`、`Gateway_pro.ino` 前，請先各自放入同名資料夾（例如 `Master_pro/Master_pro.ino`）。
+> **注意：Master、Gateway、手燈必須燒錄同一版本的韌體**。封包格式不同時會收不到指令。舊版本請從 git 歷史取得。
 
 ## 安裝與部署 (Installation and Deployment)
 1. 伺服器端設置 (PC Server)
 請確保控制電腦已安裝 Node.js 環境。
 ```bash
-# 進入伺服器目錄
-cd server
-
 # 安裝相依套件
 npm install
 
@@ -139,7 +179,7 @@ node server.js
 
     A. 主發射節點 (Master Node)
   
-     1. 開啟 ```Master_pro.ino```。
+     1. 開啟 ```firmware/master/master.ino```。
 
      2. 燒錄至連接電腦的 ESP8266。
 
@@ -147,7 +187,7 @@ node server.js
 
     B. 終端燈具節點 (Slave Node)
 
-     1. 開啟 ```light_now_v2/light_now_v2.ino```。
+     1. 開啟 ```firmware/lightstick/lightstick.ino```。
 
      2. 必要時修改硬體設定：
 
@@ -165,13 +205,13 @@ node server.js
 
      4. 燒錄至手持式 ESP8266 裝置。
 
-     > v2 已移除 `MY_GROUP_ID`，所有手燈可燒錄同一份韌體，再透過手機頁面設定各自的群組。
+     > 所有手燈可燒錄同一份韌體，再透過手機頁面設定各自的群組。
 
      > `AP_CHANNEL` 必須維持為 1，與 Master / Gateway 相同，否則收不到 ESP-NOW 訊號。
 
    C. 中繼節點 (Gateway Node) - 選配
 
-    1. 開啟 ```Gateway_pro.ino```。
+    1. 開啟 ```firmware/gateway/gateway.ino```。
 
     2. 燒錄至用於訊號中繼的 ESP8266。
 
@@ -186,22 +226,40 @@ node server.js
 
 3. 在介面右上方選擇對應的 Serial Port 並點擊「連線」（連線後同一顆按鈕會變成「斷線」）。
 
-4. 使用儀表板控制燈光：
+4. 介面分成三區：
 
-    - 群組控制: 選擇特定群組以創造波浪或分區效果。
+    - **場景**（左）：已儲存的場景。點一下載入到預覽，Shift + 點擊或 ⋯ 選單中的「直接送上現場」會立即播出。⋯ 選單還可以覆寫、重新命名、排序、刪除。
+    - **預覽 / 現場**（右上）：上排是預覽（編輯中，不會送出），下排是現場（手燈正在顯示）。預覽和現場不同的群組右上角會出現黃點。
+    - **編輯**（右下）：調整目前選取群組的模式與參數。參數區只顯示目前模式用得到的滑桿。
 
-    - Tap BPM: 配合現場音樂節奏點擊 "Tap" 按鈕（或按空白鍵），同步燈光呼吸頻率。
+5. 基本流程：
 
-    - 參數區只會顯示目前模式用得到的滑桿（例如呼吸只顯示 BPM，彩虹只顯示速度與展開）。
+    1. 點選預覽區的群組（Ctrl / ⌘ + 點擊可多選，`A` 全選）。
+    2. 調整模式、顏色、BPM 等。多選時只會修改你動到的那一項，其他設定各自保留。
+    3. 設定淡入時間（0–3 秒），按 **GO**（或 `Enter`）一次送上現場。
+    4. 滿意的話按「＋ 將預覽存成場景」，之後按數字鍵即可叫出。
 
-5. 鍵盤快捷鍵：
+6. PREVIEW / LIVE 切換（右上角，或按 `L`）：
+
+    - **PREVIEW**（預設）：所有調整只影響預覽，按 GO 才送出。
+    - **LIVE**：所有調整直接送到手燈，適合即時跟拍。開啟時上方邊框會變紅。
+
+7. 連線時會自動把畫面上的「現場」狀態完整送一次，確保手燈與畫面一致。重新整理頁面時，現場狀態會從伺服器還原。
+
+8. 鍵盤快捷鍵：
 
     | 按鍵 | 功能 |
     |------|------|
-    | `1`–`5` | 恆亮 / 呼吸 / 彩虹 / 窗口 / 節拍 |
-    | `6` | 漸變 |
-    | `0` | 關閉 (OFF) |
+    | `Enter` | GO（送出預覽的變更） |
+    | `1`–`9` | 載入場景到預覽 |
+    | `Shift` + `1`–`9` | 場景直接送上現場 |
+    | `L` | 切換 PREVIEW / LIVE |
+    | `A` | 全選群組 |
+    | `Q` `W` `E` `R` `T` `Y` | 恆亮 / 呼吸 / 彩虹 / 窗口 / 節拍 / 漸變 |
+    | `X` | 關閉 (OFF) |
     | `Space` | Tap BPM |
+
+9. 場景存在專案資料夾的 `scenes.json`，可以直接備份或複製到其他電腦使用。
 
 ### 獨立控制模式 (備援模式)
 若終端節點超過 5 秒未接收到主控訊號：
@@ -218,7 +276,7 @@ node server.js
     - 「獨立模式」：手機上的調整會立即生效。
     - 「中控同步中」：正在接收中控訊號，手機上的調整要等中控停止 5 秒後才會生效。
 
-### 修改手燈 Wi-Fi 與群組 (v2)
+### 修改手燈 Wi-Fi 與群組
 
 1. 連上手燈並打開控制頁面，切換到「設定」分頁。
 
@@ -238,7 +296,7 @@ node server.js
 
 5. 設定存在 EEPROM 中，關機或重新開機後仍會保留。
 
-### 手燈 HTTP API (v2)
+### 手燈 HTTP API
 
 | 方法 | 路徑 | 說明 |
 |------|------|------|
@@ -248,9 +306,9 @@ node server.js
 
 ### 修改手機頁介面
 
-手機頁 HTML 內嵌在 `light_now_v2.ino` 的 `R"rawliteral(` 與 `)rawliteral"` 之間（存放於 Flash / PROGMEM）。建議修改流程：
+手機頁 HTML 內嵌在 `lightstick.ino` 的 `R"rawliteral(` 與 `)rawliteral"` 之間（存放於 Flash / PROGMEM）。建議修改流程：
 
-1. 編輯 `light_now_v2/phone_ui_preview.html`，直接用瀏覽器打開預覽（非手燈環境會自動使用假資料）。
+1. 編輯 `firmware/lightstick/phone_ui_preview.html`，直接用瀏覽器打開預覽（非手燈環境會自動使用假資料）。
 
 2. 確認無誤後，將整份內容貼回 `.ino` 中上述兩個標記之間，再重新燒錄。
 
@@ -261,11 +319,15 @@ node server.js
 
 - 訊號延遲: 確保 Master 與 Slave 位於相同的 Wi-Fi Channel（預設為 1）。若場地過大或有遮蔽物，請部署 Gateway 節點。
 
-- 忘記手燈密碼: v2 沒有硬體重設鍵，需重新燒錄。注意 Arduino IDE 預設的「Erase Flash: Only Sketch」**不會**清除 EEPROM，請擇一處理：
+- 忘記手燈密碼: 手燈沒有硬體重設鍵，需重新燒錄。注意 Arduino IDE 預設的「Erase Flash: Only Sketch」**不會**清除 EEPROM，請擇一處理：
     - 燒錄時將「工具 → Erase Flash」設為「All Flash Contents」；或
-    - 將 `light_now_v2.ino` 中的 `CFG_MAGIC` 改成其他數值後重新燒錄，開機時會自動恢復預設值。
+    - 將 `lightstick.ino` 中的 `CFG_MAGIC` 改成其他數值後重新燒錄，開機時會自動恢復預設值。
 
 - 手機調整燈光沒有反應: 檢查手機頁右上角是否顯示「中控同步中」。中控台持續廣播時（含 500ms 心跳），手機的設定不會生效，請先在中控台按「斷線」。
+
+- 手燈完全沒反應: 確認 Master、Gateway、手燈都燒錄了同一版本的韌體。只要有一支還是舊版，封包格式就對不上。
+
+- 群組切換仍有先後順序: 確認 Master 已更新為最新韌體，且中控台是透過 GO 送出（舊介面 `/api/send` 沒有批次功能）。
 
 - 改完 Wi-Fi 後找不到手燈: 手機可能仍記住舊的網路設定，請在手機 Wi-Fi 列表中「忘記」舊網路後重新搜尋。
 

@@ -1,0 +1,15 @@
+{
+  "name": "lightstick-esc28",
+  "version": "3.0.0",
+  "description": "ESP-NOW 無線燈光控制系統 — 中控伺服器",
+  "main": "server.js",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@serialport/parser-readline": "^12.0.0",
+    "express": "^4.19.2",
+    "serialport": "^12.0.0"
+  }
+}
