@@ -266,7 +266,7 @@ node server.js
 
 1. 裝置將自動切換至獨立模式。
 
-2. 使用手機連接手燈的 Wi-Fi（預設 ```LightStick_140```，或你設定過的名稱）。
+2. 使用手機連接手燈的 Wi-Fi（預設 ```LightStick_001```，或你設定過的名稱）。
 
 3. 控制介面將自動彈出 (Captive Portal)。
 

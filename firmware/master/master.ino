@@ -177,7 +177,7 @@ void handleLine(char *line) {
     stage(gid, s);
     return;
   }
-  if (line[0] >= '0' && line[0] <= '9') {   // v2 舊格式
+  if (line[0] >= '0' && line[0] <= '9') {  
     int gid = atoi(line);
     char *rest = strchr(line, ',');
     Slot s = {};

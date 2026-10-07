@@ -134,7 +134,7 @@ app.put('/api/scenes', (req, res) => {
     }
 });
 
-// ---------- v2 相容：單一群組立即送出 ----------
+// ---------- version2 相容：單一群組立即送出 ----------
 app.post('/api/send', async (req, res) => {
     const s = req.body || {};
     try {

@@ -23,7 +23,7 @@
 #define COLOR_ORDER GRB
 
 // ---------- 出廠預設值（第一次開機時寫入 EEPROM） ----------
-#define DEFAULT_SSID   "LightStick_140"
+#define DEFAULT_SSID   "LightStick_001"
 #define DEFAULT_PASS   ""          // 空字串 = 開放網路；若要設定須為 8–63 字元
 #define DEFAULT_GROUP  9
 
