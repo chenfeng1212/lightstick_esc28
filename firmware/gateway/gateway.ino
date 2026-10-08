@@ -4,29 +4,12 @@
 // =====================================================================
 #include <ESP8266WiFi.h>
 #include <espnow.h>
+#include "types.h"   // 型別定義（必須放在獨立檔案，Arduino IDE 才不會在型別定義前插入函式宣告）
 
 #define PROTO_VER    3
 #define WIFI_CHANNEL 1
 
 // ===================== 封包（Master / Gateway / 手燈 必須完全相同） =====================
-typedef struct {
-  uint8_t  ver;
-  uint8_t  msgId;
-  uint8_t  targetGroup;
-  uint8_t  mode;
-  uint8_t  brightness;
-  uint8_t  reserved;
-  uint16_t bpm;
-  uint16_t fadeMs;
-  uint16_t seq;
-  uint32_t color;
-  float    speed;
-  float    spread;
-  float    duty;
-  uint32_t pal[4];
-  uint32_t timestamp;
-  uint32_t applyAt;
-} Packet;
 
 Packet rx;
 uint8_t broadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};

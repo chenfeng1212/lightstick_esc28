@@ -13,6 +13,7 @@
 #include <EEPROM.h>
 #include <FastLED.h>
 #include <espnow.h>
+#include "types.h"   
 
 #define FW_VERSION  "v3.0"
 #define PROTO_VER   3      // 必須與 Master / Gateway 相同
@@ -33,12 +34,6 @@ const int AP_CHANNEL = 1;
 // ---------- EEPROM 設定 ----------
 #define CFG_MAGIC 0x4C534332UL   // "LSC2"；改變這個值會強制重設成預設值
 
-struct Config {
-  uint32_t magic;
-  char     ssid[33];   // 最多 32 bytes + '\0'
-  char     pass[64];   // 最多 63 bytes + '\0'
-  uint8_t  group;      // 1–10
-};
 Config cfg;
 
 void loadConfig() {
@@ -66,38 +61,10 @@ void saveConfig() {
 }
 
 // ---------- 燈光狀態 ----------
-struct State {
-  uint8_t  mode;
-  uint8_t  brightness;
-  uint16_t bpm;
-  uint32_t color;
-  float    speed;
-  float    spread;
-  float    duty;
-  uint32_t pal[4];
-};
 
 State web_state    = {0, 200, 120, 0x00CCFF, 1.2f, 0.6f, 0.5f, {0xFF0044, 0xFFD400, 0x00E5FF, 0xFFFFFF}};
 
 // ===================== 封包（Master / Gateway / 手燈 必須完全相同） =====================
-typedef struct {
-  uint8_t  ver;          // 協定版本 = 3
-  uint8_t  msgId;
-  uint8_t  targetGroup;  // 0 = 全部, 1–10
-  uint8_t  mode;
-  uint8_t  brightness;
-  uint8_t  reserved;
-  uint16_t bpm;
-  uint16_t fadeMs;
-  uint16_t seq;          // 狀態版本
-  uint32_t color;
-  float    speed;
-  float    spread;
-  float    duty;
-  uint32_t pal[4];
-  uint32_t timestamp;    // Master millis()（校時用）
-  uint32_t applyAt;      // 要在 Master 的哪個時間點套用
-} Packet;
 
 // 收到的封包先放進小佇列，在 loop() 中處理（callback 內不做複雜運算）
 #define RXQ 8
@@ -113,7 +80,7 @@ uint32_t fadeStart = 0, fadeMs = 0;
 
 CRGB leds[NUM_LEDS];
 const byte DNS_PORT = 53;
-IPAddress apIP(192, 168, 4, 1);   // v1 是 .2，但轉址到 .1，導致部分手機打不開頁面
+IPAddress apIP(192, 168, 4, 1);   
 DNSServer dnsServer;
 ESP8266WebServer server(80);
 
